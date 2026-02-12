@@ -69,7 +69,7 @@ catchall_handler!(overflow_handler);
 _double_fault_handler!(double_fault_handler);
 _page_fault_handler!(page_fault_handler);
 
-// Test
+// test
 #[cfg(test)]
 use x86_64::instructions::interrupts;
 
