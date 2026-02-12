@@ -1,3 +1,4 @@
+#![feature(abi_x86_interrupt)]
 #![no_std]
 #![no_main]
 #![feature(custom_test_frameworks)]
@@ -5,16 +6,11 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-mod serial;
+
+use idt::interrupt;
 #[macro_use]
 mod vgadriver;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-pub enum QemuExitCode {
-    Success = 0x10,
-    Failed = 0x11,
-}
+mod idt;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
     println!("Running {} tests", tests.len());
@@ -25,7 +21,9 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    println!("Hello World{}", "!");
+    interrupt::init_idt();
+
+    println!("IDT loaded");
 
     // test launch
     #[cfg(test)]
