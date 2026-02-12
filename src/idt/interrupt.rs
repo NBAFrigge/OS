@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
+use x86_64::registers::control::Cr2;
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -10,6 +11,8 @@ lazy_static! {
             .set_handler_fn(non_maskable_interrupt_handler);
         idt.breakpoint.set_handler_fn(breakpoint_handler);
         idt.overflow.set_handler_fn(overflow_handler);
+        idt.double_fault.set_handler_fn(double_fault_handler);
+        idt.page_fault.set_handler_fn(page_fault_handler);
         idt
     };
 }
@@ -26,16 +29,51 @@ macro_rules! catchall_handler {
     };
 }
 
+macro_rules! _double_fault_handler {
+    ($name:ident) => {
+        extern "x86-interrupt" fn $name(stack_frame: InterruptStackFrame, error_code: u64) -> ! {
+            println!(
+                "EXCEPTION DOUBLE FAULT [{}]: {}\n{:#?}",
+                error_code,
+                stringify!($name),
+                stack_frame
+            );
+            loop {}
+        }
+    };
+}
+
+macro_rules! _page_fault_handler {
+    ($name:ident) => {
+        extern "x86-interrupt" fn $name(
+            stack_frame: InterruptStackFrame,
+            error_code: PageFaultErrorCode,
+        ) {
+            let failed_reg = Cr2::read().as_u64();
+
+            println!(
+                "EXCEPTION PAGE FAULT:\nError Code: {:?}\nAccessed Address: {:#x}\n{:#?}",
+                error_code, failed_reg, stack_frame
+            );
+            loop {}
+        }
+    };
+}
+
 catchall_handler!(divide_by_zero_handler);
 catchall_handler!(debug_handler);
 catchall_handler!(non_maskable_interrupt_handler);
 catchall_handler!(breakpoint_handler);
 catchall_handler!(overflow_handler);
 
-// TODO: ADD page fault handler
+_double_fault_handler!(double_fault_handler);
+_page_fault_handler!(page_fault_handler);
 
-// Test
+// test
+#[cfg(test)]
+use x86_64::instructions::interrupts;
+
 #[test_case]
 fn test_breakpoint_exception() {
-    x86_64::instructions::interrupts::int3();
+    interrupts::int3();
 }
