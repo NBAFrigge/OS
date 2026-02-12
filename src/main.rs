@@ -6,6 +6,17 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
+#[macro_use]
+mod vgadriver;
+#[macro_use]
+mod serial;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum QemuExitCode {
+    Success = 0x10,
+    Failed = 0x11,
+}
 
 use idt::interrupt;
 #[macro_use]
@@ -21,6 +32,9 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    println!("Hello World{}", "!");
+        
+    serial_println!("Test");
     interrupt::init_idt();
     println!("IDT loaded successfully");
 
