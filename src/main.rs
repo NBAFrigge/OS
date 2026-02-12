@@ -7,6 +7,7 @@
 use core::panic::PanicInfo;
 #[macro_use]
 mod vgadriver;
+#[macro_use]
 mod serial;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +27,8 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     println!("Hello World{}", "!");
+        
+    serial_println!("Test");
 
     // test launch
     #[cfg(test)]
