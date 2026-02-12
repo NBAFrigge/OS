@@ -1,3 +1,4 @@
+#![feature(abi_x86_interrupt)]
 #![no_std]
 #![no_main]
 #![feature(custom_test_frameworks)]
@@ -17,6 +18,11 @@ pub enum QemuExitCode {
     Failed = 0x11,
 }
 
+use idt::interrupt;
+#[macro_use]
+mod vgadriver;
+mod idt;
+
 pub fn test_runner(tests: &[&dyn Fn()]) {
     println!("Running {} tests", tests.len());
     for test in tests {
@@ -29,6 +35,8 @@ pub extern "C" fn _start() -> ! {
     println!("Hello World{}", "!");
         
     serial_println!("Test");
+    interrupt::init_idt();
+    println!("IDT loaded successfully");
 
     // test launch
     #[cfg(test)]

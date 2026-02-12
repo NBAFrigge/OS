@@ -103,6 +103,14 @@ impl Writer {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
+
+    if WRITER.is_locked() {
+        unsafe {
+            // panic case
+            WRITER.force_unlock();
+        }
+    }
+
     WRITER.lock().write_fmt(args).unwrap();
 }
 
