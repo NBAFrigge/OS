@@ -37,6 +37,6 @@ cargo bootimage
 To run the OS use the following command:
 
 ```bash
-qemu-system-x86_64 -drive format=raw,file=target/os/debug/bootimage-OS.bin
+qemu-system-x86_64 -drive format=raw,file=target/os/debug/bootimage-OS.bin -serial stdio
 
 ```

@@ -19,8 +19,6 @@ pub enum QemuExitCode {
 }
 
 use idt::interrupt;
-#[macro_use]
-mod vgadriver;
 mod idt;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
@@ -32,13 +30,10 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    println!("Hello World{}", "!");
-        
-    serial_println!("Test");
+    serial_println!("Kernel started");
     interrupt::init_idt();
     println!("IDT loaded successfully");
 
-    // test launch
     #[cfg(test)]
     test_main();
 
