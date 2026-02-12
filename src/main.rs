@@ -22,8 +22,7 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     interrupt::init_idt();
-
-    println!("IDT loaded");
+    println!("IDT loaded successfully");
 
     // test launch
     #[cfg(test)]
