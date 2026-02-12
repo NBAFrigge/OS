@@ -5,9 +5,9 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-mod serial;
 #[macro_use]
 mod vgadriver;
+mod serial;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
