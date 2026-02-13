@@ -1,5 +1,5 @@
-use spin::Mutex;
 use lazy_static::lazy_static;
+use spin::Mutex;
 use uart_16550::SerialPort;
 
 const COM1: u16 = 0x3F8;
@@ -20,3 +20,4 @@ macro_rules! serial_println {
         writeln!(port, $($arg)*).expect("Serial print failed");
     };
 }
+

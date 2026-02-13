@@ -11,7 +11,10 @@ mod vgadriver;
 #[macro_use]
 mod serial;
 
+use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
+
+mod apic;
 mod idt;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
@@ -21,11 +24,17 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
     }
 }
 
+entry_point!(kernel_main);
+
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Kernel started");
     interrupt::init_idt();
     println!("IDT loaded successfully");
+
+    unsafe {
+        apic::apic::rsdp_scan(boot_info.physical_memory_offset);
+    }
 
     #[cfg(test)]
     test_main();
