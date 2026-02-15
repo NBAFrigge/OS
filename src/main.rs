@@ -36,6 +36,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         apic::apic::init(boot_info.physical_memory_offset);
     }
 
+    x86_64::instructions::interrupts::enable();
+
     #[cfg(test)]
     test_main();
 

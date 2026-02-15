@@ -1,0 +1,22 @@
+use core::ptr::write_volatile;
+
+use crate::{apic::apic::APICPOINTERS, idt::interrupt::KEYBOARD_INTERRUPT_ID};
+
+const IOREGSEL_OFFSET: u64 = 0x00;
+const IOWIN_OFFSET: u64 = 0x10;
+
+pub unsafe fn init() {
+    let io_ptr = APICPOINTERS.lock().get_io_apic();
+
+    if io_ptr == 0 {
+        return;
+    }
+
+    let sel_ptr = (io_ptr + IOREGSEL_OFFSET) as *mut u32;
+    let win_ptr = (io_ptr + IOWIN_OFFSET) as *mut u32;
+
+    write_volatile(sel_ptr, 0x13);
+    write_volatile(win_ptr, 0);
+    write_volatile(sel_ptr, 0x12);
+    write_volatile(win_ptr, KEYBOARD_INTERRUPT_ID as u32);
+}

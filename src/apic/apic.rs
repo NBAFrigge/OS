@@ -1,11 +1,19 @@
 use core::ptr::{self, read_unaligned, read_volatile};
 
-use crate::apic::madt;
+use lazy_static::lazy_static;
+use spin::Mutex;
+
+use crate::apic::{apic_pointers, cpu_apic, io_apic, madt, pic};
 
 const START: u64 = 0xE0000;
 const END: u64 = 0xFFFFF;
 const RSDSING: u64 = 0x2052545020445352; // "RSD PTR " in little-endian
 const APICSIGN: &[u8; 4] = b"APIC";
+
+lazy_static! {
+    pub static ref APICPOINTERS: Mutex<apic_pointers::ApicPointers> =
+        Mutex::new(apic_pointers::ApicPointers::new());
+}
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -86,13 +94,23 @@ unsafe fn validate_rsdp_checksum(ptr: *const u8) -> bool {
     sum == 0
 }
 
+pub unsafe fn send_eoi() {
+    cpu_apic::send_eoi();
+}
+
 pub unsafe fn init(offset: u64) {
+    pic::disable_8259_pic();
+
     let rsdt_phys = rsdp_scan(offset).expect("RSDP not found");
     let rsdt_ptr = (rsdt_phys + offset) as *const Rsdt;
 
     let madt_v_addr = Rsdt::find_madt(rsdt_ptr, offset).expect("APIC table not found");
 
     let madt_table = madt::Madt::new(madt_v_addr);
+
+    APICPOINTERS
+        .lock()
+        .set_cpu_apic(madt_table.local_apic_address as u64 + offset);
 
     for entry in madt_table.entries() {
         match entry.typ {
@@ -110,12 +128,18 @@ pub unsafe fn init(offset: u64) {
                 let ptr = entry.base_addr as *const madt::MadtIoApic;
                 let io_apic = read_unaligned(ptr);
 
+                APICPOINTERS
+                    .lock()
+                    .set_io_apic(io_apic.io_apic_address as u64 + offset);
+
                 println!(
                     "I/O APIC: ID={}, Address={:#x}, GSI Base={}",
                     { io_apic.io_apic_id },
                     { io_apic.io_apic_address },
                     { io_apic.global_system_interrupt_base }
                 );
+
+                io_apic::init();
             },
             2 => unsafe {
                 let ptr = entry.base_addr as *const madt::MadtIso;
@@ -130,5 +154,6 @@ pub unsafe fn init(offset: u64) {
             },
             _ => {}
         }
+        cpu_apic::init();
     }
 }
