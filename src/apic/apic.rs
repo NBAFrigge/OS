@@ -41,7 +41,6 @@ pub struct Rsdt {
 
 impl Rsdt {
     unsafe fn find_madt(rsdt_ptr: *const Rsdt, offset: u64) -> Option<u64> {
-        // Usa read_unaligned perché rsdt_ptr è packed
         let length = read_unaligned(ptr::addr_of!((*rsdt_ptr).length));
         let num_entries = (length - 36) / 4;
 
@@ -94,5 +93,42 @@ pub unsafe fn init(offset: u64) {
     let madt_v_addr = Rsdt::find_madt(rsdt_ptr, offset).expect("APIC table not found");
 
     let madt_table = madt::Madt::new(madt_v_addr);
-    println!("MADT Revision: {}", madt_table.revision);
+
+    for entry in madt_table.entries() {
+        match entry.typ {
+            0 => unsafe {
+                let ptr = entry.base_addr as *const madt::MadtLocalApic;
+                let local_apic = read_unaligned(ptr);
+
+                println!(
+                    "CPU (Local APIC): ID={}, ProcessorID={}",
+                    { local_apic.apic_id },
+                    { local_apic.acpi_processor_id }
+                );
+            },
+            1 => unsafe {
+                let ptr = entry.base_addr as *const madt::MadtIoApic;
+                let io_apic = read_unaligned(ptr);
+
+                println!(
+                    "I/O APIC: ID={}, Address={:#x}, GSI Base={}",
+                    { io_apic.io_apic_id },
+                    { io_apic.io_apic_address },
+                    { io_apic.global_system_interrupt_base }
+                );
+            },
+            2 => unsafe {
+                let ptr = entry.base_addr as *const madt::MadtIso;
+                let iso = read_unaligned(ptr);
+
+                println!(
+                    "Interrupt Override: Bus={}, IRQ={} -> GSI={}",
+                    { iso.bus_source },
+                    { iso.irq_source },
+                    { iso.gsi }
+                );
+            },
+            _ => {}
+        }
+    }
 }
