@@ -3,6 +3,9 @@ use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
+use crate::apic::apic::send_eoi;
+use crate::vgadriver::keymap::KEYMAPDRIVER;
+
 pub const KEYBOARD_INTERRUPT_ID: u8 = 33;
 
 lazy_static! {
@@ -68,15 +71,11 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
 
-    if scancode > 127 {
-        unsafe {
-            send_eoi();
-            return;
-        };
+    let c = KEYMAPDRIVER.lock().convert(scancode);
+    if c != '\0' {
+        print!("{}", c);
     }
 
-    let c = KEYMAP[scancode as usize];
-    print!("{}", c);
     unsafe {
         send_eoi();
     };
@@ -94,9 +93,6 @@ _page_fault_handler!(page_fault_handler);
 // test
 #[cfg(test)]
 use x86_64::instructions::interrupts;
-
-use crate::apic::apic::send_eoi;
-use crate::vgadriver::keymap::KEYMAP;
 
 #[test_case]
 fn test_breakpoint_exception() {
