@@ -68,7 +68,15 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
 
-    print!("{}", scancode);
+    if scancode > 127 {
+        unsafe {
+            send_eoi();
+            return;
+        };
+    }
+
+    let c = KEYMAP[scancode as usize];
+    print!("{}", c);
     unsafe {
         send_eoi();
     };
@@ -88,6 +96,7 @@ _page_fault_handler!(page_fault_handler);
 use x86_64::instructions::interrupts;
 
 use crate::apic::apic::send_eoi;
+use crate::vgadriver::keymap::KEYMAP;
 
 #[test_case]
 fn test_breakpoint_exception() {
