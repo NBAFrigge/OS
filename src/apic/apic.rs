@@ -117,12 +117,6 @@ pub unsafe fn init(offset: u64) {
             0 => unsafe {
                 let ptr = entry.base_addr as *const madt::MadtLocalApic;
                 let local_apic = read_unaligned(ptr);
-
-                println!(
-                    "CPU (Local APIC): ID={}, ProcessorID={}",
-                    { local_apic.apic_id },
-                    { local_apic.acpi_processor_id }
-                );
             },
             1 => unsafe {
                 let ptr = entry.base_addr as *const madt::MadtIoApic;
@@ -132,25 +126,11 @@ pub unsafe fn init(offset: u64) {
                     .lock()
                     .set_io_apic(io_apic.io_apic_address as u64 + offset);
 
-                println!(
-                    "I/O APIC: ID={}, Address={:#x}, GSI Base={}",
-                    { io_apic.io_apic_id },
-                    { io_apic.io_apic_address },
-                    { io_apic.global_system_interrupt_base }
-                );
-
                 io_apic::init();
             },
             2 => unsafe {
                 let ptr = entry.base_addr as *const madt::MadtIso;
                 let iso = read_unaligned(ptr);
-
-                println!(
-                    "Interrupt Override: Bus={}, IRQ={} -> GSI={}",
-                    { iso.bus_source },
-                    { iso.irq_source },
-                    { iso.gsi }
-                );
             },
             _ => {}
         }

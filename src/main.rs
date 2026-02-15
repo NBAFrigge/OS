@@ -29,12 +29,14 @@ entry_point!(kernel_main);
 #[no_mangle]
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Kernel started");
-    interrupt::init_idt();
-    println!("IDT loaded successfully");
 
+    print!("Loading APIC");
+    interrupt::init_idt();
     unsafe {
         apic::apic::init(boot_info.physical_memory_offset);
     }
+
+    print!("Setup Finished");
 
     x86_64::instructions::interrupts::enable();
 
