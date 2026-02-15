@@ -33,7 +33,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     println!("IDT loaded successfully");
 
     unsafe {
-        apic::apic::rsdp_scan(boot_info.physical_memory_offset);
+        apic::apic::init(boot_info.physical_memory_offset);
     }
 
     #[cfg(test)]
