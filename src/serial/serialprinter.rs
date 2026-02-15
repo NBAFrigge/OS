@@ -12,12 +12,26 @@ lazy_static! {
     };
 }
 
+#[doc(hidden)]
+pub fn _print(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    SERIAL_LOGGER
+        .lock()
+        .write_fmt(args)
+        .expect("Serial print failed");
+}
+
 #[macro_export]
-macro_rules! serial_println {
+macro_rules! serial_print {
     ($($arg:tt)*) => {
-        use core::fmt::Write;
-        let mut port = $crate::serial::serialprinter::SERIAL_LOGGER.lock();
-        writeln!(port, $($arg)*).expect("Serial print failed");
+        $crate::serial::serialprinter::_print(format_args!($($arg)*));
     };
 }
 
+#[macro_export]
+macro_rules! serial_println {
+    () => ($crate::serial_print!("\n"));
+    ($($arg:tt)*) => {
+        $crate::serial_print!("{}\n", format_args!($($arg)*));
+    };
+}
