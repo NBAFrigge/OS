@@ -14,8 +14,13 @@ mod serial;
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
 
+use crate::datetime::datetime::Datetime;
+
 mod apic;
 mod idt;
+#[macro_use]
+mod timer;
+mod datetime;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
     println!("Running {} tests", tests.len());
@@ -39,6 +44,14 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
     x86_64::instructions::interrupts::enable();
+
+    let dt = Datetime::new();
+
+    for i in 1..10 {
+        let time = dt.date();
+        println!("[{}] {}", time, i);
+        msleep!(1000)
+    }
 
     #[cfg(test)]
     test_main();

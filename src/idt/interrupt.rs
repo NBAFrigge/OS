@@ -1,3 +1,5 @@
+use core::sync::atomic::AtomicU64;
+
 use lazy_static::lazy_static;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
@@ -7,6 +9,8 @@ use crate::apic::apic::send_eoi;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
 
 pub const KEYBOARD_INTERRUPT_ID: u8 = 33;
+pub const TIMER_INTERRUPT_ID: u8 = 34;
+pub static TICKS: AtomicU64 = AtomicU64::new(0);
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -20,6 +24,7 @@ lazy_static! {
         idt.double_fault.set_handler_fn(double_fault_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
         idt[KEYBOARD_INTERRUPT_ID as usize].set_handler_fn(keyboard_handler);
+        idt[TIMER_INTERRUPT_ID as usize].set_handler_fn(timer_handler);
         idt
     };
 }
@@ -79,6 +84,13 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     unsafe {
         send_eoi();
     };
+}
+
+extern "x86-interrupt" fn timer_handler(_stack_frame: InterruptStackFrame) {
+    TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    unsafe {
+        send_eoi();
+    }
 }
 
 catchall_handler!(divide_by_zero_handler);
