@@ -24,7 +24,7 @@ impl Datetime {
     }
 
     pub fn now(&self) -> u64 {
-        self.timestmap + TICKS.load(core::sync::atomic::Ordering::Relaxed)
+        self.timestmap + TICKS.load(core::sync::atomic::Ordering::Relaxed) / 1000
     }
 
     pub fn date(&self) -> FormattedTime {
