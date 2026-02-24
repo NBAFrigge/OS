@@ -21,6 +21,7 @@ mod idt;
 #[macro_use]
 mod timer;
 mod datetime;
+mod paging;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
     println!("Running {} tests", tests.len());
