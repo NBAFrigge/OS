@@ -6,7 +6,9 @@ use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use crate::apic::apic::send_eoi;
+use crate::shell::shell::SHELL;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
+use crate::vgadriver::writer::WRITER;
 
 pub const KEYBOARD_INTERRUPT_ID: u8 = 33;
 pub const TIMER_INTERRUPT_ID: u8 = 34;
@@ -78,7 +80,13 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
 
     let c = KEYMAPDRIVER.lock().convert(scancode);
     if c != '\0' {
-        print!("{}", c);
+        if c == '\x08' {
+            WRITER.lock().backspace();
+            SHELL.lock().delete_char();
+        } else {
+            print!("{}", c);
+            SHELL.lock().add_char(c);
+        }
     }
 
     unsafe {

@@ -80,6 +80,15 @@ impl Writer {
         self.column_position = 0;
     }
 
+    pub fn backspace(&mut self) {
+        if self.column_position == 0 {
+            return;
+        }
+        self.column_position -= 1;
+        self.write_byte(b' ');
+        self.column_position -= 1;
+    }
+
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             ascii_character: b' ',

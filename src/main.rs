@@ -21,6 +21,7 @@ mod idt;
 mod timer;
 mod datetime;
 mod memory;
+mod shell;
 
 extern crate alloc;
 
