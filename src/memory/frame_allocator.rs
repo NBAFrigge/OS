@@ -24,7 +24,7 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
             .memory_map
             .iter()
             .filter(|p| p.region_type == MemoryRegionType::Usable)
-            .flat_map(|p| p.range.start_frame_number..p.range.end_frame_number)
+            .flat_map(|p| (p.range.start_addr()..p.range.end_addr()).step_by(4096))
             .nth(self.next);
 
         if address == None {
@@ -35,4 +35,3 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
         Some(PhysFrame::containing_address(phys_addr))
     }
 }
-

@@ -11,17 +11,18 @@ mod vgadriver;
 #[macro_use]
 mod serial;
 
+use crate::datetime::datetime::Datetime;
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
-
-use crate::datetime::datetime::Datetime;
 
 mod apic;
 mod idt;
 #[macro_use]
 mod timer;
 mod datetime;
-mod paging;
+mod memory;
+
+extern crate alloc;
 
 pub fn test_runner(tests: &[&dyn Fn()]) {
     println!("Running {} tests", tests.len());
@@ -36,23 +37,17 @@ entry_point!(kernel_main);
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Kernel started");
 
-    serial_println!("Loading APIC");
     interrupt::init_idt();
     unsafe {
+        serial_println!("Loading APIC");
         apic::apic::init(boot_info.physical_memory_offset);
+        serial_println!("Loading heap");
+        memory::memory::init(&boot_info.memory_map, boot_info.physical_memory_offset);
     }
 
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
     x86_64::instructions::interrupts::enable();
-
-    let dt = Datetime::new();
-
-    for i in 1..10 {
-        let time = dt.date();
-        println!("[{}] {}", time, i);
-        msleep!(1000)
-    }
 
     #[cfg(test)]
     test_main();
