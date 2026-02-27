@@ -120,6 +120,21 @@ impl Writer {
         }
     }
 
+    pub fn clear(&mut self) {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+        for row in 0..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                self.buffer.chars[row][col].write(blank);
+            }
+        }
+        self.column_position = 0;
+        self.row_position = 0;
+        self.update_cursor();
+    }
+
     fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {

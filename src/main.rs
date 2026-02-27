@@ -11,7 +11,6 @@ mod vgadriver;
 #[macro_use]
 mod serial;
 
-use crate::datetime::datetime::Datetime;
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
 
@@ -19,6 +18,7 @@ mod apic;
 mod idt;
 #[macro_use]
 mod timer;
+mod command_handler;
 mod datetime;
 mod memory;
 mod shell;
@@ -49,6 +49,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
     x86_64::instructions::interrupts::enable();
+
+    command_handler::command_handler::init_commands();
 
     #[cfg(test)]
     test_main();

@@ -1,5 +1,5 @@
 use alloc::string::String;
 
-pub fn parser(s: &String) -> String {
-    String::from(s.trim())
+pub fn parser(s: &str) -> Option<(&str, &str)> {
+    s.trim().split_once(' ')
 }

@@ -2,7 +2,7 @@ use alloc::string::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::shell::parser::parser;
+use crate::{command_handler::command_handler::run_command, shell::parser::parser};
 
 pub struct Shell {
     pub buffer: String,
@@ -50,9 +50,14 @@ impl Shell {
     }
 
     pub fn send_buffer(&mut self) {
-        let parsed_command = parser(&self.buffer);
-        self.buffer.clear();
+        let input = core::mem::take(&mut self.buffer);
         self.index = 0;
+
+        if let Some((cmd, args)) = parser(&input) {
+            run_command(cmd, args);
+        } else {
+            run_command(input.trim(), "");
+        }
     }
 }
 
