@@ -1,9 +1,12 @@
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use lazy_static::lazy_static;
+use spin::mutex::Mutex;
 use x86_64::{
     structures::paging::{FrameAllocator, PhysFrame, Size4KiB},
     PhysAddr,
 };
 
+#[derive(Debug, Copy, Clone)]
 pub struct BootInfoFrameAllocator {
     memory_map: &'static MemoryMap,
     next: usize,
@@ -15,6 +18,10 @@ impl BootInfoFrameAllocator {
             memory_map,
             next: 0,
         }
+    }
+
+    pub fn get_used_frames(self) -> usize {
+        self.next
     }
 }
 
@@ -34,4 +41,8 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
         self.next += 1;
         Some(PhysFrame::containing_address(phys_addr))
     }
+}
+
+lazy_static! {
+    pub static ref FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> = Mutex::new(None);
 }

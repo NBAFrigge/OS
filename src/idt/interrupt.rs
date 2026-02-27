@@ -6,7 +6,9 @@ use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use crate::apic::apic::send_eoi;
+use crate::shell::shell::SHELL;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
+use crate::vgadriver::writer::WRITER;
 
 pub const KEYBOARD_INTERRUPT_ID: u8 = 33;
 pub const TIMER_INTERRUPT_ID: u8 = 34;
@@ -76,9 +78,33 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
 
-    let c = KEYMAPDRIVER.lock().convert(scancode);
-    if c != '\0' {
-        print!("{}", c);
+    match scancode {
+        0x4B => {
+            // right arrow
+            SHELL.lock().move_index_left();
+            WRITER.lock().redraw_shell_line();
+        }
+        0x4D => {
+            // left arrow
+            SHELL.lock().move_index_right();
+            WRITER.lock().redraw_shell_line();
+        }
+        _ => {
+            let c = KEYMAPDRIVER.lock().convert(scancode);
+            if c != '\0' {
+                if c == '\x08' {
+                    // backspace
+                    SHELL.lock().delete_char();
+                    WRITER.lock().redraw_shell_line();
+                } else if c == '\n' {
+                    println!();
+                    SHELL.lock().send_buffer();
+                } else {
+                    SHELL.lock().add_char(c);
+                    WRITER.lock().redraw_shell_line();
+                }
+            }
+        }
     }
 
     unsafe {

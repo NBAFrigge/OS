@@ -3,6 +3,8 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
 
+use crate::shell::shell::SHELL;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 struct ScreenChar {
@@ -34,12 +36,21 @@ impl fmt::Write for Writer {
 }
 
 impl Writer {
-    pub fn new() -> Writer {
-        Writer {
+    pub fn new() -> Self {
+        let mut w = Writer {
             column_position: 0,
             row_position: 0,
             color_code: 0x07,
             buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+        };
+        w.clear_screen();
+        w.update_cursor();
+        w
+    }
+
+    fn clear_screen(&mut self) {
+        for row in 0..BUFFER_HEIGHT {
+            self.clear_row(row);
         }
     }
 
@@ -50,13 +61,16 @@ impl Writer {
         }
 
         if self.column_position >= BUFFER_WIDTH {
-            self.new_line()
+            self.new_line();
         }
+
         self.buffer.chars[self.row_position][self.column_position].write(ScreenChar {
             ascii_character: byte,
             color_code: self.color_code,
         });
-        self.column_position += 1
+
+        self.column_position += 1;
+        self.update_cursor();
     }
 
     fn new_line(&mut self) {
@@ -67,6 +81,7 @@ impl Writer {
         } else {
             self.row_position += 1;
         }
+        self.update_cursor();
     }
 
     fn scroll(&mut self) {
@@ -78,6 +93,21 @@ impl Writer {
         }
         self.clear_row(BUFFER_HEIGHT - 1);
         self.column_position = 0;
+        self.update_cursor();
+    }
+
+    pub fn backspace(&mut self) {
+        if self.column_position > 0 {
+            self.column_position -= 1;
+
+            let blank = ScreenChar {
+                ascii_character: b' ',
+                color_code: self.color_code,
+            };
+            self.buffer.chars[self.row_position][self.column_position].write(blank);
+
+            self.update_cursor();
+        }
     }
 
     fn clear_row(&mut self, row: usize) {
@@ -90,6 +120,21 @@ impl Writer {
         }
     }
 
+    pub fn clear(&mut self) {
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+        for row in 0..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                self.buffer.chars[row][col].write(blank);
+            }
+        }
+        self.column_position = 0;
+        self.row_position = 0;
+        self.update_cursor();
+    }
+
     fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
@@ -97,6 +142,76 @@ impl Writer {
                 _ => self.write_byte(0xfe),
             }
         }
+    }
+
+    pub fn redraw_shell_line(&mut self) {
+        let (content, shell_index) = {
+            let shell = SHELL.lock();
+            (shell.buffer.clone(), shell.index as usize)
+        };
+
+        self.column_position = 0;
+
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            color_code: self.color_code,
+        };
+        for col in 0..BUFFER_WIDTH {
+            self.buffer.chars[self.row_position][col].write(blank);
+        }
+
+        for byte in content.bytes() {
+            self.write_byte_raw(byte);
+        }
+
+        self.column_position = shell_index;
+        self.update_cursor();
+    }
+
+    fn write_byte_raw(&mut self, byte: u8) {
+        if self.column_position >= BUFFER_WIDTH {
+            return;
+        }
+
+        self.buffer.chars[self.row_position][self.column_position].write(ScreenChar {
+            ascii_character: byte,
+            color_code: self.color_code,
+        });
+        self.column_position += 1;
+    }
+
+    fn update_cursor(&mut self) {
+        let mut pos = (self.row_position * BUFFER_WIDTH) + self.column_position;
+
+        if pos >= BUFFER_WIDTH * BUFFER_HEIGHT {
+            pos = (BUFFER_WIDTH * BUFFER_HEIGHT) - 1;
+        }
+
+        unsafe {
+            let mut addr_port = x86_64::instructions::port::Port::<u8>::new(0x3D4);
+            let mut data_port = x86_64::instructions::port::Port::<u8>::new(0x3D5);
+
+            addr_port.write(0x0E);
+            data_port.write((pos >> 8) as u8);
+            addr_port.write(0x0F);
+            data_port.write((pos & 0xFF) as u8);
+        }
+    }
+
+    pub fn move_cursor_left(&mut self) {
+        if self.column_position == 0 {
+            return;
+        }
+        self.column_position -= 1;
+        self.update_cursor();
+    }
+
+    pub fn move_cursor_right(&mut self) {
+        if self.column_position >= 80 {
+            return;
+        }
+        self.column_position += 1;
+        self.update_cursor();
     }
 }
 
