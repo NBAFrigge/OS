@@ -2,6 +2,8 @@ use alloc::string::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+use crate::shell::parser::parser;
+
 pub struct Shell {
     pub buffer: String,
     pub index: u8,
@@ -23,8 +25,6 @@ impl Shell {
             self.buffer.insert(self.index as usize, c);
             self.index += 1;
         }
-
-        serial_println!("current buffer: {}", self.buffer);
     }
 
     pub fn delete_char(&mut self) {
@@ -33,7 +33,6 @@ impl Shell {
         }
         self.index -= 1;
         self.buffer.remove(self.index as usize);
-        serial_println!("current buffer: {}", self.buffer);
     }
 
     pub fn move_index_left(&mut self) {
@@ -41,7 +40,6 @@ impl Shell {
             return;
         }
         self.index -= 1;
-        serial_println!("current index {}", self.index);
     }
 
     pub fn move_index_right(&mut self) {
@@ -49,7 +47,12 @@ impl Shell {
             return;
         }
         self.index += 1;
-        serial_println!("current index {}", self.index);
+    }
+
+    pub fn send_buffer(&mut self) {
+        let parsed_command = parser(&self.buffer);
+        self.buffer.clear();
+        self.index = 0;
     }
 }
 
