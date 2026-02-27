@@ -3,8 +3,8 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 pub struct Shell {
-    buffer: String,
-    index: u8,
+    pub buffer: String,
+    pub index: u8,
 }
 
 impl Shell {
@@ -37,11 +37,19 @@ impl Shell {
     }
 
     pub fn move_index_left(&mut self) {
+        if self.index == 0 {
+            return;
+        }
         self.index -= 1;
+        serial_println!("current index {}", self.index);
     }
 
     pub fn move_index_right(&mut self) {
+        if self.index >= 80 || self.index + 1 > self.buffer.len() as u8 {
+            return;
+        }
         self.index += 1;
+        serial_println!("current index {}", self.index);
     }
 }
 

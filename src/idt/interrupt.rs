@@ -78,14 +78,33 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     let mut port = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
 
-    let c = KEYMAPDRIVER.lock().convert(scancode);
-    if c != '\0' {
-        if c == '\x08' {
-            WRITER.lock().backspace();
-            SHELL.lock().delete_char();
-        } else {
-            print!("{}", c);
-            SHELL.lock().add_char(c);
+    match scancode {
+        0x4B => {
+            // right arrow
+            SHELL.lock().move_index_left();
+            WRITER.lock().redraw_shell_line();
+        }
+        0x4D => {
+            // left arrow
+            SHELL.lock().move_index_right();
+            WRITER.lock().redraw_shell_line();
+        }
+        _ => {
+            let c = KEYMAPDRIVER.lock().convert(scancode);
+            if c != '\0' {
+                if c == '\x08' {
+                    // backspace
+                    SHELL.lock().delete_char();
+                    WRITER.lock().redraw_shell_line();
+                } else if c == '\n' {
+                    println!();
+                    SHELL.lock().buffer.clear();
+                    SHELL.lock().index = 0;
+                } else {
+                    SHELL.lock().add_char(c);
+                    WRITER.lock().redraw_shell_line();
+                }
+            }
         }
     }
 
