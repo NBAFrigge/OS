@@ -22,6 +22,7 @@ mod command_handler;
 mod datetime;
 mod memory;
 mod shell;
+mod task;
 
 extern crate alloc;
 
