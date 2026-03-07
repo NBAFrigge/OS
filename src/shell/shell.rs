@@ -18,12 +18,14 @@ impl Shell {
     }
 
     pub fn add_char(&mut self, c: char) {
-        if self.index == self.buffer.len() as u8 {
-            self.buffer.push(c);
-            self.index += 1;
-        } else {
-            self.buffer.insert(self.index as usize, c);
-            self.index += 1;
+        if self.buffer.len() < 79 {
+            if self.index == self.buffer.len() as u8 {
+                self.buffer.push(c);
+                self.index += 1;
+            } else {
+                self.buffer.insert(self.index as usize, c);
+                self.index += 1;
+            }
         }
     }
 
@@ -43,7 +45,7 @@ impl Shell {
     }
 
     pub fn move_index_right(&mut self) {
-        if self.index >= 80 || self.index + 1 > self.buffer.len() as u8 {
+        if self.index >= 79 || self.index + 1 > self.buffer.len() as u8 {
             return;
         }
         self.index += 1;

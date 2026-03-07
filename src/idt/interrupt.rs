@@ -100,6 +100,7 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
                 } else if c == '\n' {
                     println!();
                     SHELL.lock().send_buffer();
+                    WRITER.lock().redraw_shell_line();
                 } else {
                     SHELL.lock().add_char(c);
                     WRITER.lock().redraw_shell_line();

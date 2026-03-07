@@ -15,7 +15,7 @@ mod serial;
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
 
-use crate::{shell::shell::shell_task, task::task::idle_task};
+use crate::{shell::shell::shell_task, task::task::idle_task, vgadriver::writer::WRITER};
 
 mod apic;
 mod idt;
@@ -66,6 +66,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
+
+    WRITER.lock().redraw_shell_line();
 
     x86_64::instructions::interrupts::enable();
 
