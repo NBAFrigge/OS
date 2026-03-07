@@ -4,6 +4,7 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
+#![feature(naked_functions)]
 
 use core::panic::PanicInfo;
 #[macro_use]
@@ -13,6 +14,8 @@ mod serial;
 
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
+
+use crate::{shell::shell::shell_task, task::task::idle_task};
 
 mod apic;
 mod idt;
@@ -47,18 +50,32 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         memory::memory::init(&boot_info.memory_map, boot_info.physical_memory_offset);
     }
 
+    command_handler::command_handler::init_commands();
+
+    let idle = crate::task::task::Task::new(0, idle_task as u64);
+    let shell = crate::task::task::Task::new(1, shell_task as u64);
+
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let mut manager = crate::task::task_manager::GLOBAL_TASK_MANAGER.lock();
+        manager.task_list.push_back(alloc::boxed::Box::new(idle));
+        manager.task_list.push_back(alloc::boxed::Box::new(shell));
+        if let Some(first) = manager.task_list.pop_front() {
+            manager.current_task = Some(first);
+        }
+    });
+
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
-    x86_64::instructions::interrupts::enable();
 
-    command_handler::command_handler::init_commands();
+    x86_64::instructions::interrupts::enable();
 
     #[cfg(test)]
     test_main();
 
-    loop {}
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
-
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {

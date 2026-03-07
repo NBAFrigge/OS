@@ -1,6 +1,9 @@
 use alloc::vec::Vec;
+use x86_64::structures::idt::InterruptStackFrame;
 
-#[derive(Debug)]
+const STACK_CAPACITY: usize = 1024 * 16; // 16 kib
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum State {
     Ready,
     Running,
@@ -39,4 +42,43 @@ pub struct Registers {
     pub rflags: u64,
     pub rsp: u64,
     pub ss: u64,
+}
+
+impl Task {
+    pub fn new(id: u8, entry_point: u64) -> Self {
+        let mut stack = Vec::with_capacity(STACK_CAPACITY);
+
+        let stack_start = stack.as_ptr() as usize;
+        let stack_top = stack_start + STACK_CAPACITY;
+
+        let registers_size = core::mem::size_of::<Registers>();
+        let saved_sp = (stack_top - registers_size) as *mut Registers;
+
+        unsafe {
+            let regs = &mut *saved_sp;
+
+            core::ptr::write_bytes(saved_sp, 0, 1);
+
+            regs.rip = entry_point;
+            regs.cs = 8;
+            regs.rflags = 0x202; // interrupt enabled
+            regs.rsp = stack_top as u64;
+            regs.ss = 0;
+        }
+
+        Task {
+            id,
+            state: State::Ready,
+            saved_stack_pointer: saved_sp as usize,
+            stack,
+        }
+    }
+}
+
+pub extern "C" fn idle_task() -> ! {
+    loop {
+        unsafe {
+            x86_64::instructions::hlt();
+        }
+    }
 }

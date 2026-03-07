@@ -1,5 +1,5 @@
+use core::arch::naked_asm;
 use core::sync::atomic::AtomicU64;
-
 use lazy_static::lazy_static;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
@@ -7,6 +7,7 @@ use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, Pag
 
 use crate::apic::apic::send_eoi;
 use crate::shell::shell::SHELL;
+use crate::task::task_manager::GLOBAL_TASK_MANAGER;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
 use crate::vgadriver::writer::WRITER;
 
@@ -112,11 +113,57 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     };
 }
 
+#[unsafe(naked)]
 extern "x86-interrupt" fn timer_handler(_stack_frame: InterruptStackFrame) {
-    TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
     unsafe {
-        send_eoi();
+        naked_asm!(
+            "push rax",
+            "push rcx",
+            "push rdx",
+            "push rbx",
+            "push rbp",
+            "push rsi",
+            "push rdi",
+            "push r8",
+            "push r9",
+            "push r10",
+            "push r11",
+            "push r12",
+            "push r13",
+            "push r14",
+            "push r15",
+            "mov rdi, rsp",
+            "call timer_tick_handler",
+            "mov rsp, rax",
+            "pop r15",
+            "pop r14",
+            "pop r13",
+            "pop r12",
+            "pop r11",
+            "pop r10",
+            "pop r9",
+            "pop r8",
+            "pop rdi",
+            "pop rsi",
+            "pop rbp",
+            "pop rbx",
+            "pop rdx",
+            "pop rcx",
+            "pop rax",
+            "iretq",
+        );
     }
+}
+
+#[no_mangle]
+extern "C" fn timer_tick_handler(stack_pointer: usize) -> usize {
+    TICKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+
+    unsafe {
+        crate::apic::apic::send_eoi();
+    }
+
+    GLOBAL_TASK_MANAGER.lock().rotate(stack_pointer)
 }
 
 catchall_handler!(divide_by_zero_handler);

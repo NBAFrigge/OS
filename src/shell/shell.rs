@@ -2,7 +2,7 @@ use alloc::string::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::{command_handler::command_handler::run_command, shell::parser::parser};
+use crate::{command_handler::command_handler::run_command, shell::parser::parser, vgadriver};
 
 pub struct Shell {
     pub buffer: String,
@@ -58,6 +58,12 @@ impl Shell {
         } else {
             run_command(input.trim(), "");
         }
+    }
+}
+
+pub extern "C" fn shell_task() -> ! {
+    loop {
+        x86_64::instructions::hlt();
     }
 }
 
