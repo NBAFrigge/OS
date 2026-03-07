@@ -1,5 +1,8 @@
 use alloc::vec::Vec;
+use core::arch::asm;
 use x86_64::structures::idt::InterruptStackFrame;
+
+use crate::idt::interrupt::TICKS;
 
 const STACK_CAPACITY: usize = 1024 * 16; // 16 kib
 
@@ -15,6 +18,7 @@ pub struct Task {
     pub state: State,
     pub saved_stack_pointer: usize,
     pub stack: Vec<u8>,
+    pub wake_on_tick: u64,
 }
 
 #[repr(C)]
@@ -64,15 +68,36 @@ impl Task {
             regs.rflags = 0x202; // interrupt enabled
             regs.rsp = stack_top as u64;
             regs.ss = 0;
-        }
 
-        Task {
-            id,
-            state: State::Ready,
-            saved_stack_pointer: saved_sp as usize,
-            stack,
+            Task {
+                id,
+                state: State::Ready,
+                saved_stack_pointer: saved_sp as usize,
+                stack,
+                wake_on_tick: 0,
+            }
         }
     }
+}
+
+pub fn yield_now() {
+    unsafe {
+        asm!("int 34");
+    }
+}
+
+pub fn sleep(ms: u64) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let mut manager = crate::task::task_manager::GLOBAL_TASK_MANAGER.lock();
+
+        if let Some(task) = manager.current_task.as_mut() {
+            task.state = State::Waiting;
+            task.wake_on_tick =
+                crate::idt::interrupt::TICKS.load(core::sync::atomic::Ordering::Relaxed) + ms;
+        }
+    });
+
+    yield_now();
 }
 
 pub extern "C" fn idle_task() -> ! {
