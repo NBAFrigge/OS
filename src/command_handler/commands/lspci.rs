@@ -7,19 +7,18 @@ pub fn cmd_lspci(args: &str) {
         return;
     }
 
-    println!("BUS  DEV  FUN  ID_IDENTIFIER");
-    println!("----------------------------");
+    println!("BUS  DEV  FUN  ID_IDENTIFIER  TYPE");
+    println!("-------------------------------------");
 
     for device in pci_list {
-        let vendor = device.get_vendor_id();
-        let device_id = device.get_device_id();
         println!(
-            "{:02x}   {:02x}   {:01x}    [{:04x}:{:04x}]",
+            "{:02x}:{:02x}.{:01x} [{:04x}:{:04x}] {}",
             device.bus(),
             device.device(),
             device.function(),
-            vendor,
-            device_id
+            device.get_vendor_id(),
+            device.get_device_id(),
+            device.get_class_name(),
         );
     }
 }
