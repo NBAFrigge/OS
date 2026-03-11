@@ -48,7 +48,11 @@ pub fn run_command(name: &str, args: &str) {
 
     match cmd_func {
         Some(func) => (func)(args),
-        None => println!("command not found {}", name),
+        None => {
+            if !name.is_empty() {
+                println!("command not found {}", name)
+            }
+        }
     }
 }
 lazy_static! {
