@@ -6,6 +6,8 @@ use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use crate::apic::apic::send_eoi;
+use crate::command_handler::command_handler::run_command;
+use crate::shell::parser::parser;
 use crate::shell::shell::SHELL;
 use crate::task::task_manager::GLOBAL_TASK_MANAGER;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
@@ -99,7 +101,19 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
                     WRITER.lock().redraw_shell_line();
                 } else if c == '\n' {
                     println!();
-                    SHELL.lock().send_buffer();
+
+                    let command_input = {
+                        let mut shell = SHELL.lock();
+                        shell.send_buffer()
+                    };
+                    if !command_input.trim().is_empty() {
+                        if let Some((cmd, args)) = parser(&command_input) {
+                            run_command(cmd, args);
+                        } else {
+                            run_command(command_input.trim(), "");
+                        }
+                    }
+
                     WRITER.lock().redraw_shell_line();
                 } else {
                     SHELL.lock().add_char(c);
