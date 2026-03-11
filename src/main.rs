@@ -23,6 +23,7 @@ mod idt;
 mod timer;
 mod command_handler;
 mod datetime;
+mod drivers;
 mod memory;
 mod shell;
 mod task;
