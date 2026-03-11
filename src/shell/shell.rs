@@ -51,15 +51,10 @@ impl Shell {
         self.index += 1;
     }
 
-    pub fn send_buffer(&mut self) {
+    pub fn send_buffer(&mut self) -> String {
         let input = core::mem::take(&mut self.buffer);
         self.index = 0;
-
-        if let Some((cmd, args)) = parser(&input) {
-            run_command(cmd, args);
-        } else {
-            run_command(input.trim(), "");
-        }
+        input
     }
 }
 
