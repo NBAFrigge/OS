@@ -2,11 +2,25 @@
 use alloc::vec::Vec;
 use x86_64::instructions::port::Port;
 
+use crate::drivers::bar::{Bar, BarType};
+
+const PCI_CONFIG_ADDR: u16 = 0xCF8;
+const PCI_CONFIG_DATA: u16 = 0xCFC;
+
+const PCI_BAR_TYPE_IO: u32 = 0x1;
+const PCI_BAR_MEM_TYPE_MASK: u32 = 0x6;
+const PCI_BAR_MEM_TYPE_64: u32 = 0x4;
+const PCI_BAR_PREFETCHABLE: u32 = 0x8;
+
+const PCI_BAR_IO_ADDR_MASK: u32 = !0x3;
+const PCI_BAR_MEM_ADDR_MASK: u32 = !0xF;
+
 #[derive(Clone, Copy)]
 pub struct PciAddress {
     config_address: u32,
     id_register: u32,
     class_register: u32,
+    bars: [Option<Bar>; 6],
 }
 
 impl PciAddress {
@@ -15,6 +29,7 @@ impl PciAddress {
             config_address: 1 << 31,
             id_register: 0xFFFFFFFF,
             class_register: 0,
+            bars: [None; 6],
         };
         addr.set_bus(bus);
         addr.set_device(device);
@@ -61,8 +76,8 @@ impl PciAddress {
 
     pub fn read_id_register(&mut self) {
         let addr = PciAddress::new(self.bus(), self.device(), self.function(), 0);
-        let mut addr_port = Port::<u32>::new(0xCF8);
-        let mut data_port = Port::<u32>::new(0xCFC);
+        let mut addr_port = Port::<u32>::new(PCI_CONFIG_ADDR);
+        let mut data_port = Port::<u32>::new(PCI_CONFIG_DATA);
         unsafe {
             addr_port.write(addr.raw());
             self.id_register = data_port.read();
@@ -71,11 +86,92 @@ impl PciAddress {
 
     pub fn read_class_register(&mut self) {
         let addr = PciAddress::new(self.bus(), self.device(), self.function(), 8);
-        let mut addr_port = Port::<u32>::new(0xCF8);
-        let mut data_port = Port::<u32>::new(0xCFC);
+        let mut addr_port = Port::<u32>::new(PCI_CONFIG_ADDR);
+        let mut data_port = Port::<u32>::new(PCI_CONFIG_DATA);
         unsafe {
             addr_port.write(addr.raw());
             self.class_register = data_port.read();
+        }
+    }
+
+    pub fn read_bar(&mut self) {
+        let mut addr_port = Port::<u32>::new(PCI_CONFIG_ADDR);
+        let mut data_port = Port::<u32>::new(PCI_CONFIG_DATA);
+        let mut skip_next = false;
+
+        for i in 0..6 {
+            if skip_next {
+                skip_next = false;
+                continue;
+            }
+
+            let bar_offset = 0x10 + (i * 4);
+            let addr = PciAddress::new(self.bus(), self.device(), self.function(), bar_offset);
+
+            unsafe {
+                addr_port.write(addr.raw());
+                let original_bar = data_port.read();
+
+                if original_bar == 0 {
+                    continue;
+                }
+
+                data_port.write(0xFFFFFFFF);
+                let response_mask = data_port.read();
+                data_port.write(original_bar);
+
+                if (original_bar & PCI_BAR_TYPE_IO) != 0 {
+                    let address = (original_bar & PCI_BAR_IO_ADDR_MASK) as u64;
+                    let size = (!(response_mask & PCI_BAR_IO_ADDR_MASK)).wrapping_add(1);
+
+                    self.bars[i as usize] =
+                        Some(Bar::new(address, size as usize, BarType::Io, false));
+                } else {
+                    let is_prefetchable = (original_bar & PCI_BAR_PREFETCHABLE) != 0;
+                    let is_64bit = (original_bar & PCI_BAR_MEM_TYPE_MASK) == PCI_BAR_MEM_TYPE_64;
+
+                    if !is_64bit {
+                        let address = (original_bar & PCI_BAR_MEM_ADDR_MASK) as u64;
+                        let size = (!(response_mask & PCI_BAR_MEM_ADDR_MASK)).wrapping_add(1);
+
+                        self.bars[i as usize] = Some(Bar::new(
+                            address,
+                            size as usize,
+                            BarType::Memory32,
+                            is_prefetchable,
+                        ));
+                    } else {
+                        let next_bar_offset = bar_offset + 4;
+                        let next_addr = PciAddress::new(
+                            self.bus(),
+                            self.device(),
+                            self.function(),
+                            next_bar_offset,
+                        );
+
+                        addr_port.write(next_addr.raw());
+                        let original_high = data_port.read();
+                        data_port.write(0xFFFFFFFF);
+                        let response_high = data_port.read();
+                        data_port.write(original_high);
+
+                        let address = ((original_bar & PCI_BAR_MEM_ADDR_MASK) as u64)
+                            | ((original_high as u64) << 32);
+
+                        let full_mask = ((response_mask & PCI_BAR_MEM_ADDR_MASK) as u64)
+                            | ((response_high as u64) << 32);
+                        let size = (!full_mask).wrapping_add(1);
+
+                        self.bars[i as usize] = Some(Bar::new(
+                            address,
+                            size as usize,
+                            BarType::Memory64,
+                            is_prefetchable,
+                        ));
+                        skip_next = true;
+                    }
+                }
+            }
         }
     }
 
