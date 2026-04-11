@@ -37,6 +37,8 @@ const RCTL_BSIZE_2048: u32 = 0 << 16;
 const TCTL_EN: u32 = 1 << 1;
 const TCTL_PSP: u32 = 1 << 3;
 
+const EOP_RS: u8 = 0b00001001;
+
 pub struct E1000 {
     pub base_addr: u64,
     pub mac: [u8; 6],
@@ -219,6 +221,34 @@ impl E1000 {
         }
 
         mac
+    }
+
+    pub fn send(&mut self, frame: &[u8]) {
+        self.tx_buffers[self.tx_tail as usize][..frame.len()].copy_from_slice(frame);
+        self.tx_ring[self.tx_tail as usize].length = frame.len() as u16;
+        self.tx_ring[self.tx_tail as usize].cmd = EOP_RS;
+        self.tx_tail = (self.tx_tail + 1) % TX_DESC_COUNT as u32;
+
+        unsafe {
+            write_volatile((self.base_addr + REG_TDT as u64) as *mut u32, self.tx_tail);
+        }
+    }
+
+    pub fn receive(&mut self) -> Option<&[u8]> {
+        let next = ((self.rx_tail + 1) % RX_DESC_COUNT as u32) as usize;
+        let status = self.rx_ring[next].status;
+        if status & 0x1 == 0 {
+            return None;
+        }
+
+        let length = self.rx_ring[next].length as usize;
+        self.rx_ring[next].status = 0;
+        self.rx_tail = next as u32;
+        unsafe {
+            write_volatile((self.base_addr + REG_RDT as u64) as *mut u32, self.rx_tail);
+        }
+
+        Some(&self.rx_buffers[next][..length])
     }
 }
 
