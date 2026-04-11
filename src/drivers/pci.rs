@@ -190,6 +190,10 @@ impl PciAddress {
         ((self.class_register >> 16) & 0xFF) as u8
     }
 
+    pub fn get_bar(&self, index: usize) -> Option<Bar> {
+        self.bars[index]
+    }
+
     pub fn get_class_name(&self) -> &'static str {
         match self.get_base_class() {
             0x00 => "Unclassified",
@@ -232,6 +236,7 @@ impl PciAddress {
 
                 if addr.get_vendor_id() != 0xFFFF {
                     addr.read_class_register();
+                    addr.read_bar();
                     list.push(addr);
                 }
             }

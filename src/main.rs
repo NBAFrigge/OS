@@ -11,13 +11,19 @@ use core::{ops::Add, panic::PanicInfo};
 mod vgadriver;
 #[macro_use]
 mod serial;
+mod net;
 
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::{shell::shell::shell_task, task::task::idle_task, vgadriver::writer::WRITER};
+use crate::{
+    net::e1000::{E1000, E1000_DRIVER},
+    shell::shell::shell_task,
+    task::task::idle_task,
+    vgadriver::writer::WRITER,
+};
 
 mod apic;
 mod idt;
@@ -74,6 +80,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     x86_64::instructions::interrupts::enable();
 
+    let e1000 = E1000::init().unwrap_or_else(|err| {
+        serial_println!("E1000 init failed: {}", err);
+        panic!("E1000 init failed");
+    });
+
+    *E1000_DRIVER.lock() = Some(e1000);
+
     #[cfg(test)]
     test_main();
 
@@ -81,6 +94,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         x86_64::instructions::hlt();
     }
 }
+
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
