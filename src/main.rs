@@ -6,7 +6,7 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(naked_functions)]
 
-use core::panic::PanicInfo;
+use core::{ops::Add, panic::PanicInfo};
 #[macro_use]
 mod vgadriver;
 #[macro_use]
@@ -14,6 +14,8 @@ mod serial;
 
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
+use lazy_static::lazy_static;
+use spin::Mutex;
 
 use crate::{shell::shell::shell_task, task::task::idle_task, vgadriver::writer::WRITER};
 
@@ -42,7 +44,7 @@ entry_point!(kernel_main);
 #[no_mangle]
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Kernel started");
-
+    crate::memory::memory::set_physical_memory_offset(boot_info.physical_memory_offset);
     interrupt::init_idt();
     unsafe {
         serial_println!("Loading APIC");
@@ -92,4 +94,8 @@ fn panic(info: &PanicInfo) -> ! {
     println!("[failed]\n");
     println!("Error: {}\n", info);
     loop {}
+}
+
+lazy_static! {
+    pub static ref MEMORY_OFFSET: Mutex<u64> = Mutex::new(0);
 }

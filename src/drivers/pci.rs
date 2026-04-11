@@ -1,4 +1,3 @@
-// TODO: Implement BAR
 use alloc::vec::Vec;
 use x86_64::instructions::port::Port;
 
