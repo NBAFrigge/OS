@@ -3,10 +3,11 @@ use alloc::vec::Vec;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+use crate::command_handler::commands::arp_test::cmd_arp_test;
 use crate::command_handler::commands::clear::cmd_clear;
 use crate::command_handler::commands::echo::cmd_echo;
 use crate::command_handler::commands::help::cmd_help;
-use crate::command_handler::commands::lspci::{self, cmd_lspci};
+use crate::command_handler::commands::lspci::cmd_lspci;
 use crate::command_handler::commands::paging::cmd_paging;
 use crate::command_handler::commands::sleep::cmd_sleep;
 
@@ -42,6 +43,10 @@ pub fn init_commands() {
     registry.push(Command {
         name: "lspci",
         func: cmd_lspci,
+    });
+    registry.push(Command {
+        name: "arptest",
+        func: cmd_arp_test,
     });
 }
 

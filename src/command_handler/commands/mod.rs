@@ -1,3 +1,4 @@
+pub mod arp_test;
 pub mod clear;
 pub mod echo;
 pub mod help;

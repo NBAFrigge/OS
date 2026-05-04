@@ -19,7 +19,10 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::{
-    net::e1000::{E1000, E1000_DRIVER},
+    net::{
+        dispatcher::network_task_entry,
+        e1000::{E1000, E1000_DRIVER},
+    },
     shell::shell::shell_task,
     task::task::idle_task,
     vgadriver::writer::WRITER,
@@ -52,6 +55,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Kernel started");
     crate::memory::memory::set_physical_memory_offset(boot_info.physical_memory_offset);
     interrupt::init_idt();
+
     unsafe {
         serial_println!("Loading APIC");
         apic::apic::init(boot_info.physical_memory_offset);
@@ -61,13 +65,24 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     command_handler::command_handler::init_commands();
 
+    let e1000 = E1000::init().unwrap_or_else(|err| {
+        serial_println!("E1000 init failed: {}", err);
+        panic!("E1000 init failed");
+    });
+    *E1000_DRIVER.lock() = Some(e1000);
+
     let idle = crate::task::task::Task::new(0, idle_task as u64);
     let shell = crate::task::task::Task::new(1, shell_task as u64);
+    let network_poll = crate::task::task::Task::new(2, network_task_entry as u64);
 
     x86_64::instructions::interrupts::without_interrupts(|| {
         let mut manager = crate::task::task_manager::GLOBAL_TASK_MANAGER.lock();
         manager.task_list.push_back(alloc::boxed::Box::new(idle));
         manager.task_list.push_back(alloc::boxed::Box::new(shell));
+        manager
+            .task_list
+            .push_back(alloc::boxed::Box::new(network_poll)); // Aggiunta qui!
+
         if let Some(first) = manager.task_list.pop_front() {
             manager.current_task = Some(first);
         }
@@ -79,13 +94,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     WRITER.lock().redraw_shell_line();
 
     x86_64::instructions::interrupts::enable();
-
-    let e1000 = E1000::init().unwrap_or_else(|err| {
-        serial_println!("E1000 init failed: {}", err);
-        panic!("E1000 init failed");
-    });
-
-    *E1000_DRIVER.lock() = Some(e1000);
 
     #[cfg(test)]
     test_main();
