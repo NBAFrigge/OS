@@ -2,7 +2,7 @@ use alloc::collections::BTreeMap;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::net::{arp::arp::ArpPacket, e1000::E1000_DRIVER, ethernet};
+use crate::net::{arp::arp_struct::ArpPacket, e1000::E1000_DRIVER, ethernet};
 
 #[derive(PartialEq)]
 pub enum EntryState {
@@ -31,7 +31,7 @@ pub fn resolve_mac(
     }
 
     let arp_packet = ArpPacket::new(
-        super::arp::ArpOperation::Request,
+        super::arp_struct::ArpOperation::Request,
         sender_hw_address,
         sender_ip,
         [0, 0, 0, 0, 0, 0],
@@ -44,8 +44,6 @@ pub fn resolve_mac(
         0x0806,
         arp_packet.as_bytes(),
     );
-
-    serial_println!("DEBUG: Attempting to send ARP...");
 
     if let Some(ref mut nic) = *E1000_DRIVER.lock() {
         nic.send(&arp_ethernet_frag);

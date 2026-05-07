@@ -22,6 +22,7 @@ use crate::{
     net::{
         dispatcher::network_task_entry,
         e1000::{E1000, E1000_DRIVER},
+        interface::NETWORK_INTERFACE,
     },
     shell::shell::shell_task,
     task::task::idle_task,
@@ -87,6 +88,16 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             manager.current_task = Some(first);
         }
     });
+
+    if let Some(ref nic) = *E1000_DRIVER.lock() {
+        NETWORK_INTERFACE.lock().hw_addr = Some(nic.mac)
+    } else {
+        println!("Error: NIC not initialized");
+    };
+
+    NETWORK_INTERFACE.lock().ip_addr = Some([192, 168, 1, 230]);
+    NETWORK_INTERFACE.lock().subnet_mask = Some([255, 255, 255, 0]);
+    NETWORK_INTERFACE.lock().gateway_ip = Some([192, 168, 1, 1]);
 
     serial_println!("Setup Finished");
     println!("Kernel Loaded");

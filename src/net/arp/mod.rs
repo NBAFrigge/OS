@@ -1,2 +1,2 @@
-pub mod arp;
+pub mod arp_struct;
 pub mod protocol;

@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use crate::net::{
     arp::{self},
     e1000::E1000_DRIVER,
+    interface::NETWORK_INTERFACE,
 };
 
 pub fn cmd_arp_test(raw_args: &str) {
@@ -21,7 +22,12 @@ pub fn cmd_arp_test(raw_args: &str) {
         return;
     };
 
-    let sender_ip = [192, 168, 1, 231];
+    let sender_ip = if let Some(ip) = NETWORK_INTERFACE.lock().ip_addr {
+        ip
+    } else {
+        println!("NETWORK_INTERFACE not initialized");
+        return;
+    };
 
     println!("Resolving MAC for {}...", args[0]);
 
