@@ -32,11 +32,11 @@ impl ip_Header {
 
     pub fn calculate_checksum(&mut self) {
         self.checksum = 0;
-        let bytes = unsafe { core::slice::from_raw_parts((self as *const Self) as *const u16, 10) };
-
+        let ptr = self as *const Self as *const u16;
         let mut sum: u32 = 0;
-        for &word in bytes {
-            sum += u16::from_be(word) as u32;
+
+        for i in 0..10 {
+            sum += unsafe { ptr.add(i).read_unaligned() }.to_be() as u32;
         }
 
         while (sum >> 16) != 0 {
@@ -44,5 +44,19 @@ impl ip_Header {
         }
 
         self.checksum = (!(sum as u16)).to_be();
+    }
+
+    pub fn serialize(&self, payload: &[u8], target_buffer: &mut [u8]) -> usize {
+        let header_size = core::mem::size_of::<Self>(); // Sempre 20
+        let total_size = header_size + payload.len();
+
+        let header_ptr = self as *const Self as *const u8;
+        let header_slice = unsafe { core::slice::from_raw_parts(header_ptr, header_size) };
+
+        target_buffer[0..header_size].copy_from_slice(header_slice);
+
+        target_buffer[header_size..total_size].copy_from_slice(payload);
+
+        total_size
     }
 }

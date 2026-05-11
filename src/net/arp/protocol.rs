@@ -2,7 +2,9 @@ use alloc::collections::BTreeMap;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::net::{arp::arp_struct::ArpPacket, e1000::E1000_DRIVER, ethernet};
+use crate::net::{
+    arp::arp_struct::ArpPacket, e1000::E1000_DRIVER, ethernet, interface::NETWORK_INTERFACE,
+};
 
 #[derive(PartialEq)]
 pub enum EntryState {
@@ -38,16 +40,7 @@ pub fn resolve_mac(
         *ip_target,
     );
 
-    let arp_ethernet_frag = ethernet::build(
-        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
-        sender_hw_address,
-        0x0806,
-        arp_packet.as_bytes(),
-    );
-
-    if let Some(ref mut nic) = *E1000_DRIVER.lock() {
-        nic.send(&arp_ethernet_frag);
-    }
+    NETWORK_INTERFACE.lock().send_arp(&arp_packet);
 
     {
         let mut table = ArpTable.lock();
