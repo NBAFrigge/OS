@@ -243,4 +243,15 @@ impl PciAddress {
         }
         list
     }
+
+    pub fn enable_bus_mastering(&mut self) {
+        let addr = PciAddress::new(self.bus(), self.device(), self.function(), 0x04);
+        let mut addr_port = Port::<u32>::new(PCI_CONFIG_ADDR);
+        let mut data_port = Port::<u32>::new(PCI_CONFIG_DATA);
+        unsafe {
+            addr_port.write(addr.raw());
+            let command = data_port.read();
+            data_port.write(command | (1 << 2));
+        }
+    }
 }

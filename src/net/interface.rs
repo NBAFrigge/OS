@@ -47,14 +47,23 @@ impl Interface {
 
         self.tx_buffer[0..6].copy_from_slice(&broadcast);
         self.tx_buffer[6..12].copy_from_slice(&src_mac);
-        self.tx_buffer[12..14].copy_from_slice(&[0x08, 0x06]); // EtherType ARP
+        self.tx_buffer[12..14].copy_from_slice(&[0x08, 0x06]);
 
         let arp_bytes = arp_packet.as_bytes();
-        let size = arp_bytes.len();
-        self.tx_buffer[14..14 + size].copy_from_slice(arp_bytes);
+        let arp_size = arp_bytes.len();
+        self.tx_buffer[14..14 + arp_size].copy_from_slice(arp_bytes);
+
+        let mut total_size = 14 + arp_size;
+        if total_size < 60 {
+            for i in total_size..60 {
+                self.tx_buffer[i] = 0;
+            }
+            total_size = 60;
+        }
 
         if let Some(ref mut nic) = *E1000_DRIVER.lock() {
-            nic.send(&self.tx_buffer[..14 + size]);
+            nic.send(&self.tx_buffer[..total_size]);
+            serial_println!("ARP: Packet sent ({} bytes)", total_size);
         }
     }
 }

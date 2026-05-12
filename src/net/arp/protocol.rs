@@ -41,6 +41,7 @@ pub fn resolve_mac(
     );
 
     NETWORK_INTERFACE.lock().send_arp(&arp_packet);
+    serial_println!("ARP SENT");
 
     {
         let mut table = ArpTable.lock();

@@ -15,18 +15,9 @@ pub fn cmd_arp_test(raw_args: &str) {
     }
 
     let target_ip = parse_ip(args[0]);
-    let sender_hw_addr = if let Some(ref nic) = *E1000_DRIVER.lock() {
-        nic.mac
-    } else {
-        println!("Error: NIC not initialized");
-        return;
-    };
-
-    let sender_ip = if let Some(ip) = NETWORK_INTERFACE.lock().ip_addr {
-        ip
-    } else {
-        println!("NETWORK_INTERFACE not initialized");
-        return;
+    let (sender_hw_addr, sender_ip) = {
+        let interface = NETWORK_INTERFACE.lock();
+        (interface.hw_addr.unwrap(), interface.ip_addr.unwrap())
     };
 
     println!("Resolving MAC for {}...", args[0]);

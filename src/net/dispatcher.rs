@@ -4,12 +4,14 @@ pub fn poll_network() {
     x86_64::instructions::interrupts::without_interrupts(|| {
         if let Some(ref mut nic) = *E1000_DRIVER.lock() {
             while let Some(frame_bytes) = nic.receive() {
+                serial_println!("Debug packet arrived");
                 if let Some(decoded_frame) = ethernet::parse(&frame_bytes) {
                     match decoded_frame.ether_type {
                         0x0806 => {
                             if let Some(arp_packet) =
                                 arp::arp_struct::ArpPacket::from_bytes(decoded_frame.payload)
                             {
+                                serial_println!("packet arp arrived");
                                 arp::protocol::handle_packet(arp_packet);
                             }
                         }
@@ -37,5 +39,6 @@ pub fn poll_network() {
 pub extern "C" fn network_task_entry() {
     loop {
         poll_network();
+        crate::task::task::yield_now();
     }
 }

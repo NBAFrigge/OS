@@ -82,7 +82,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         manager.task_list.push_back(alloc::boxed::Box::new(shell));
         manager
             .task_list
-            .push_back(alloc::boxed::Box::new(network_poll)); // Aggiunta qui!
+            .push_back(alloc::boxed::Box::new(network_poll));
 
         if let Some(first) = manager.task_list.pop_front() {
             manager.current_task = Some(first);
@@ -94,10 +94,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     } else {
         println!("Error: NIC not initialized");
     };
-
-    NETWORK_INTERFACE.lock().ip_addr = Some([192, 168, 1, 230]);
+    NETWORK_INTERFACE.lock().ip_addr = Some([10, 0, 2, 15]);
     NETWORK_INTERFACE.lock().subnet_mask = Some([255, 255, 255, 0]);
-    NETWORK_INTERFACE.lock().gateway_ip = Some([192, 168, 1, 1]);
+    NETWORK_INTERFACE.lock().gateway_ip = Some([10, 0, 2, 2]);
 
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
