@@ -1,4 +1,4 @@
-use crate::{serial_println, vgadriver::writer::WRITER};
+use crate::{net::ipv4::protocol::send, vgadriver::writer::WRITER};
 use alloc::vec::Vec;
 use core::ptr::read_unaligned;
 
@@ -105,27 +105,22 @@ pub fn handle_icmp_packet(src_ip: [u8; 4], payload: &[u8]) {
     }
 }
 
-fn reply_to_ping(target_ip: [u8; 4], request: IcmpPacket, data: &[u8]) {
-    let mut reply_header = IcmpPacket {
+pub fn reply_to_ping(target_ip: [u8; 4], request: IcmpPacket, data: &[u8]) {
+    let reply = IcmpPacket {
         typ: ICMP_TYPE_ECHO_REPLY,
         code: 0,
         checksum: 0,
-        id: request.id.to_be(),
-        sequence: request.sequence.to_be(),
+        id: request.id,
+        sequence: request.sequence,
     };
 
-    let mut reply_payload = Vec::with_capacity(8 + data.len());
-    reply_payload.extend_from_slice(reply_header.to_bytes());
-    reply_payload.extend_from_slice(data);
+    let mut full_payload = Vec::with_capacity(8 + data.len());
+    full_payload.extend_from_slice(reply.to_bytes());
+    full_payload.extend_from_slice(data);
 
-    let checksum = IcmpPacket::calculate_checksum_raw(&reply_payload);
-    reply_payload[2] = (checksum >> 8) as u8;
-    reply_payload[3] = (checksum & 0xFF) as u8;
+    let cs = IcmpPacket::calculate_checksum_raw(&full_payload);
+    full_payload[2] = (cs >> 8) as u8;
+    full_payload[3] = (cs & 0xFF) as u8;
 
-    let (my_ip, my_mac) = {
-        let interface = crate::net::interface::NETWORK_INTERFACE.lock();
-        (interface.ip_addr.unwrap(), interface.hw_addr.unwrap())
-    };
-
-    crate::net::ipv4::protocol::send(my_ip, my_mac, target_ip, 1, &reply_payload);
+    send(target_ip, 1, &full_payload);
 }

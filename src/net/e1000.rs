@@ -23,8 +23,8 @@ const REG_RCTL: u32 = 0x0100;
 const REG_TDBAL: u32 = 0x3800;
 const REG_TDBAH: u32 = 0x3804;
 const REG_TDLEN: u32 = 0x3808;
-const REG_TDH: u32 = 0x3810;
-const REG_TDT: u32 = 0x3818;
+const REG_TDH: u64 = 0x3810;
+const REG_TDT: u64 = 0x3818;
 const REG_TCTL: u32 = 0x0400;
 
 const RX_DESC_COUNT: usize = 32;
@@ -246,7 +246,10 @@ impl E1000 {
         mac
     }
 
-    pub fn send(&mut self, frame: &[u8]) {
+    pub fn send(&mut self, frame: &[u8]) -> bool {
+        if self.is_tx_ring_full() {
+            return false;
+        }
         self.tx_buffers[self.tx_tail as usize][..frame.len()].copy_from_slice(frame);
         self.tx_ring[self.tx_tail as usize].length = frame.len() as u16;
         self.tx_ring[self.tx_tail as usize].cmd = CMD_EOP_IFCS_RS;
@@ -258,6 +261,8 @@ impl E1000 {
         unsafe {
             write_volatile((self.base_addr + REG_TDT as u64) as *mut u32, self.tx_tail);
         }
+
+        true
     }
     pub fn receive(&mut self) -> Option<&[u8]> {
         let status = unsafe { read_volatile(&self.rx_ring[self.rx_next].status as *const u8) };
@@ -281,9 +286,23 @@ impl E1000 {
 
         Some(data)
     }
+
+    fn is_tx_ring_full(&self) -> bool {
+        let head = self.read_register(REG_TDH);
+        let tail = self.read_register(REG_TDT);
+        let next_tail = (tail + 1) % TX_DESC_COUNT as u32;
+
+        next_tail == head
+    }
+
+    fn read_register(&self, offset: u64) -> u32 {
+        unsafe {
+            let addr = (self.base_addr + offset) as usize;
+            core::ptr::read_volatile(addr as *const u32)
+        }
+    }
 }
 
 lazy_static! {
     pub static ref E1000_DRIVER: Mutex<Option<E1000>> = Mutex::new(None);
 }
-
