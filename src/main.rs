@@ -6,16 +6,28 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(naked_functions)]
 
-use core::panic::PanicInfo;
+use core::{ops::Add, panic::PanicInfo};
 #[macro_use]
 mod vgadriver;
 #[macro_use]
 mod serial;
+mod net;
 
 use bootloader::{entry_point, BootInfo};
 use idt::interrupt;
+use lazy_static::lazy_static;
+use spin::Mutex;
 
-use crate::{shell::shell::shell_task, task::task::idle_task, vgadriver::writer::WRITER};
+use crate::{
+    net::{
+        dispatcher::network_task_entry,
+        e1000::{E1000, E1000_DRIVER},
+        interface::NETWORK_INTERFACE,
+    },
+    shell::shell::shell_task,
+    task::task::idle_task,
+    vgadriver::writer::WRITER,
+};
 
 mod apic;
 mod idt;
@@ -23,6 +35,7 @@ mod idt;
 mod timer;
 mod command_handler;
 mod datetime;
+mod drivers;
 mod memory;
 mod shell;
 mod task;
@@ -41,8 +54,9 @@ entry_point!(kernel_main);
 #[no_mangle]
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     serial_println!("Kernel started");
-
+    crate::memory::memory::set_physical_memory_offset(boot_info.physical_memory_offset);
     interrupt::init_idt();
+
     unsafe {
         serial_println!("Loading APIC");
         apic::apic::init(boot_info.physical_memory_offset);
@@ -52,17 +66,37 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     command_handler::command_handler::init_commands();
 
+    let e1000 = E1000::init().unwrap_or_else(|err| {
+        serial_println!("E1000 init failed: {}", err);
+        panic!("E1000 init failed");
+    });
+    *E1000_DRIVER.lock() = Some(e1000);
+
     let idle = crate::task::task::Task::new(0, idle_task as u64);
     let shell = crate::task::task::Task::new(1, shell_task as u64);
+    let network_poll = crate::task::task::Task::new(2, network_task_entry as u64);
 
     x86_64::instructions::interrupts::without_interrupts(|| {
         let mut manager = crate::task::task_manager::GLOBAL_TASK_MANAGER.lock();
         manager.task_list.push_back(alloc::boxed::Box::new(idle));
         manager.task_list.push_back(alloc::boxed::Box::new(shell));
+        manager
+            .task_list
+            .push_back(alloc::boxed::Box::new(network_poll));
+
         if let Some(first) = manager.task_list.pop_front() {
             manager.current_task = Some(first);
         }
     });
+
+    if let Some(ref nic) = *E1000_DRIVER.lock() {
+        NETWORK_INTERFACE.lock().hw_addr = Some(nic.mac)
+    } else {
+        println!("Error: NIC not initialized");
+    };
+    NETWORK_INTERFACE.lock().ip_addr = Some([10, 0, 2, 15]);
+    NETWORK_INTERFACE.lock().subnet_mask = Some([255, 255, 255, 0]);
+    NETWORK_INTERFACE.lock().gateway_ip = Some([10, 0, 2, 2]);
 
     serial_println!("Setup Finished");
     println!("Kernel Loaded");
@@ -78,6 +112,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         x86_64::instructions::hlt();
     }
 }
+
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -91,4 +126,8 @@ fn panic(info: &PanicInfo) -> ! {
     println!("[failed]\n");
     println!("Error: {}\n", info);
     loop {}
+}
+
+lazy_static! {
+    pub static ref MEMORY_OFFSET: Mutex<u64> = Mutex::new(0);
 }

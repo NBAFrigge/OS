@@ -9,7 +9,7 @@ use x86_64::{
 use crate::memory::frame_allocator::BootInfoFrameAllocator;
 
 const HEAP_START: u64 = 0x_4444_4444_0000;
-const SIZE: usize = 100 * 1024; // 100 Kib
+const SIZE: usize = 1024 * 1024; // 1 MiB
 const HEAP_END: u64 = HEAP_START + SIZE as u64 - 1;
 
 #[global_allocator]
