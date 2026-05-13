@@ -214,15 +214,14 @@ impl Writer {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-
-    if WRITER.is_locked() {
-        unsafe {
-            // panic case
-            WRITER.force_unlock();
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        if WRITER.is_locked() {
+            unsafe {
+                WRITER.force_unlock();
+            }
         }
-    }
-
-    WRITER.lock().write_fmt(args).unwrap();
+        WRITER.lock().write_fmt(args).unwrap();
+    });
 }
 
 #[macro_export]
