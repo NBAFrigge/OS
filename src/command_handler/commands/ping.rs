@@ -1,12 +1,13 @@
+use core::sync::atomic::Ordering;
+
 use alloc::vec::Vec;
 
+use crate::idt::interrupt::TICKS;
 use crate::net::arp;
 use crate::net::interface::NETWORK_INTERFACE;
 use crate::net::ipv4::protocol;
-use crate::net::ipv4::transport::icmp::IcmpPacket;
+use crate::net::ipv4::transport::icmp::{IcmpPacket, PING_REPLY};
 use crate::task::task::sleep;
-
-const PAYLOAD: &[u8; 10] = b"SWAG ping!";
 
 pub fn cmd_ping(args: &str) {
     let args_list: Vec<&str> = args.split_whitespace().collect();
@@ -15,7 +16,13 @@ pub fn cmd_ping(args: &str) {
         return;
     }
 
-    let target_ip = parse_ip(args_list[0]);
+    let target_ip = match parse_ip(args_list[0]) {
+        Some(ip) => ip,
+        None => {
+            println!("ping: invalid address '{}'", args_list[0]);
+            return;
+        }
+    };
 
     let target_ip_for_arp = {
         let interface = NETWORK_INTERFACE.lock();
@@ -26,34 +33,59 @@ pub fn cmd_ping(args: &str) {
         }
     };
 
-    println!("PING {}", args_list[0]);
+    println!(
+        "PING {}.{}.{}.{}",
+        target_ip[0], target_ip[1], target_ip[2], target_ip[3]
+    );
 
-    let ping_data = IcmpPacket::new_ping(0x1234, 1, PAYLOAD);
+    if !arp::protocol::is_resolved(&target_ip_for_arp) {
+        protocol::send(target_ip, 1, &[]);
 
-    protocol::send(target_ip, 1, &ping_data);
-
-    if arp::protocol::is_resolved(&target_ip_for_arp) {
-        return;
-    }
-
-    for _ in 0..10 {
-        sleep(10);
-        if arp::protocol::is_resolved(&target_ip_for_arp) {
-            protocol::send(target_ip, 1, &ping_data);
+        let mut resolved = false;
+        for _ in 0..50 {
+            sleep(10);
+            if arp::protocol::is_resolved(&target_ip_for_arp) {
+                resolved = true;
+                break;
+            }
+        }
+        if !resolved {
+            println!("ping: ARP timeout");
             return;
         }
     }
 
-    println!("ping: ARP timeout");
-}
+    let payload = TICKS.load(Ordering::Relaxed);
+    let payload_bytes = payload.to_ne_bytes();
+    let ping_data = IcmpPacket::new_ping(0x1234, 1, &payload_bytes);
+    *PING_REPLY.lock() = None;
+    protocol::send(target_ip, 1, &ping_data);
 
-fn parse_ip(ip_str: &str) -> [u8; 4] {
-    let mut ip = [0u8; 4];
-    let parts: Vec<&str> = ip_str.split('.').collect();
-    for i in 0..4 {
-        if i < parts.len() {
-            ip[i] = parts[i].parse().unwrap_or(0);
+    let send_time = TICKS.load(Ordering::Relaxed);
+
+    for _ in 0..500 {
+        sleep(10);
+        if let Some((reply_ip, seq)) = PING_REPLY.lock().take() {
+            let rtt = TICKS.load(Ordering::Relaxed) - send_time;
+            println!(
+                "64 bytes from {}.{}.{}.{}: icmp_seq={} ttl=64 time={} ms",
+                reply_ip[0], reply_ip[1], reply_ip[2], reply_ip[3], seq, rtt
+            );
+            return;
         }
     }
-    ip
+
+    println!("Request timeout");
+}
+
+fn parse_ip(ip_str: &str) -> Option<[u8; 4]> {
+    let parts: Vec<&str> = ip_str.split('.').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let mut ip = [0u8; 4];
+    for (i, part) in parts.iter().enumerate() {
+        ip[i] = part.parse::<u8>().ok()?;
+    }
+    Some(ip)
 }

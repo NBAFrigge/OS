@@ -31,13 +31,8 @@ pub fn send(dst_ip: [u8; 4], protocol: u8, payload: &[u8]) {
     };
     header.calculate_checksum();
 
-    match arp::protocol::resolve_mac(&target_ip_for_arp, src_ip, src_mac) {
-        Some(mac) => {
-            NETWORK_INTERFACE.lock().send_ipv4(header, payload, mac);
-        }
-        None => {
-            serial_println!("ARP: resolving {:?}, packet dropped", target_ip_for_arp);
-        }
+    if let Some(mac) = arp::protocol::resolve_mac(&target_ip_for_arp, src_ip, src_mac) {
+        NETWORK_INTERFACE.lock().send_ipv4(header, payload, mac);
     }
 }
 
