@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use crate::kwarn;
 
 pub struct EthernetPacket<'a> {
     pub dst_mac: [u8; 6],
@@ -9,6 +10,7 @@ pub struct EthernetPacket<'a> {
 
 pub fn parse(frame: &[u8]) -> Option<EthernetPacket> {
     if frame.len() < 14 {
+        kwarn!("Ethernet: frame too short ({} bytes)", frame.len());
         return None;
     }
 

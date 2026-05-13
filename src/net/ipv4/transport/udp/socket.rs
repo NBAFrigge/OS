@@ -5,9 +5,10 @@ use alloc::vec::Vec;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::net::interface::{Interface, NETWORK_INTERFACE};
+use crate::net::interface::NETWORK_INTERFACE;
 use crate::net::ipv4;
 use crate::net::ipv4::transport::udp::packet::{UdpHeader, UdpPacketData};
+use crate::{kdebug, kwarn};
 
 const PROTOCOL: u8 = 17;
 
@@ -74,19 +75,24 @@ pub fn handle_udp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
     let dst_ip = NETWORK_INTERFACE.lock().ip_addr.expect("IP not set");
 
     let checksum = header.checksum;
+    let dst_port = header.dst_port;
     if checksum != 0 && checksum != header.calculate_checksum(src_ip, &dst_ip, payload) {
+        kwarn!("UDP: checksum mismatch on port {}, dropping", dst_port);
         return;
     }
 
-    let packet_data = UdpPacketData::new(*src_ip, header.src_port, payload.to_vec());
-    let dst_port = header.dst_port;
+    let src_port = header.src_port;
+    let packet_data = UdpPacketData::new(*src_ip, src_port, payload.to_vec());
     let manager = UDP_SOCKET_MANAGER.lock();
 
     if let Some(socket_handle) = manager.get(&dst_port) {
         let mut socket = socket_handle.lock();
 
         if socket.rx_queue.len() < socket.max_queue_size {
+            kdebug!("UDP: received {} bytes on port {}", payload.len(), dst_port);
             socket.rx_queue.push_back(packet_data);
+        } else {
+            kwarn!("UDP: rx queue full on port {}, dropping", dst_port);
         }
     }
 }

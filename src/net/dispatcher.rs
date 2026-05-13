@@ -8,6 +8,7 @@ use crate::net::{
         transport::{icmp::icmp::handle_icmp_packet, udp::socket::handle_udp_packet},
     },
 };
+use crate::ktrace;
 
 pub fn poll_network() {
     if let Some(ref mut nic) = *E1000_DRIVER.lock() {
@@ -51,10 +52,14 @@ pub fn poll_network() {
                             // UDP
                             handle_udp_packet(&ip_header.src_ip, payload);
                         }
-                        _ => {}
+                        _ => {
+                            ktrace!("IPv4: unknown protocol {}", ip_header.protocol);
+                        }
                     }
                 }
-                _ => {}
+                _ => {
+                    ktrace!("Ethernet: unknown ethertype 0x{:04X}", decoded_frame.ether_type);
+                }
             }
         }
     }

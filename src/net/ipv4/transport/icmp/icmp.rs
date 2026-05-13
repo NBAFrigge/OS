@@ -1,4 +1,5 @@
 use crate::{net::ipv4::protocol::send, vgadriver::writer::WRITER};
+use crate::{kdebug, kwarn};
 use alloc::vec::Vec;
 use core::ptr::read_unaligned;
 use lazy_static::lazy_static;
@@ -85,11 +86,21 @@ impl IcmpPacket {
 
 pub fn handle_icmp_packet(src_ip: [u8; 4], payload: &[u8]) {
     if let Some(icmp) = IcmpPacket::from_bytes(payload) {
-        match icmp.typ {
+        let typ = icmp.typ;
+        let seq = icmp.sequence;
+        match typ {
             ICMP_TYPE_ECHO_REPLY => {
-                *PING_REPLY.lock() = Some((src_ip, icmp.sequence));
+                kdebug!(
+                    "ICMP: echo reply from {}.{}.{}.{} seq={}",
+                    src_ip[0], src_ip[1], src_ip[2], src_ip[3], seq
+                );
+                *PING_REPLY.lock() = Some((src_ip, seq));
             }
             ICMP_TYPE_ECHO_REQUEST => {
+                kdebug!(
+                    "ICMP: echo request from {}.{}.{}.{} seq={}",
+                    src_ip[0], src_ip[1], src_ip[2], src_ip[3], seq
+                );
                 print!("\n");
                 println!("ICMP: Echo Request receveid from {:?}", src_ip);
                 x86_64::instructions::interrupts::without_interrupts(|| {
@@ -98,7 +109,9 @@ pub fn handle_icmp_packet(src_ip: [u8; 4], payload: &[u8]) {
 
                 reply_to_ping(src_ip, icmp, &payload[8..]);
             }
-            _ => {}
+            _ => {
+                kwarn!("ICMP: unknown type {}", typ);
+            }
         }
     }
 }
