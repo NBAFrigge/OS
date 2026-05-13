@@ -7,6 +7,7 @@ use crate::command_handler::commands::arp_test::cmd_arp_test;
 use crate::command_handler::commands::clear::cmd_clear;
 use crate::command_handler::commands::echo::cmd_echo;
 use crate::command_handler::commands::help::cmd_help;
+use crate::command_handler::commands::loglevel::{cmd_get_loglevel, cmd_set_loglevel};
 use crate::command_handler::commands::lspci::cmd_lspci;
 use crate::command_handler::commands::paging::cmd_paging;
 use crate::command_handler::commands::ping::cmd_ping;
@@ -57,6 +58,14 @@ pub fn init_commands() {
     registry.push(Command {
         name: "udplisten",
         func: cmd_udplisten,
+    });
+    registry.push(Command {
+        name: "setloglevel",
+        func: cmd_set_loglevel,
+    });
+    registry.push(Command {
+        name: "getloglevel",
+        func: cmd_get_loglevel,
     });
 }
 

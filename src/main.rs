@@ -11,6 +11,8 @@ use core::panic::PanicInfo;
 mod vgadriver;
 #[macro_use]
 mod serial;
+#[macro_use]
+mod logger;
 mod net;
 
 use bootloader::{entry_point, BootInfo};
@@ -53,21 +55,21 @@ entry_point!(kernel_main);
 
 #[no_mangle]
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    serial_println!("Kernel started");
+    kinfo!("Kernel started");
     crate::memory::memory::set_physical_memory_offset(boot_info.physical_memory_offset);
     interrupt::init_idt();
 
     unsafe {
-        serial_println!("Loading APIC");
+        kinfo!("Loading APIC");
         apic::apic::init(boot_info.physical_memory_offset);
-        serial_println!("Loading heap");
+        kinfo!("Loading heap");
         memory::memory::init(&boot_info.memory_map, boot_info.physical_memory_offset);
     }
 
     command_handler::command_handler::init_commands();
 
     let e1000 = E1000::init().unwrap_or_else(|err| {
-        serial_println!("E1000 init failed: {}", err);
+        kerror!("E1000 init failed: {}", err);
         panic!("E1000 init failed");
     });
     *E1000_DRIVER.lock() = Some(e1000);
@@ -98,7 +100,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     NETWORK_INTERFACE.lock().subnet_mask = Some([255, 255, 255, 0]);
     NETWORK_INTERFACE.lock().gateway_ip = Some([10, 0, 2, 2]);
 
-    serial_println!("Setup Finished");
+    kinfo!("Setup Finished");
     println!("Kernel Loaded");
 
     WRITER.lock().redraw_shell_line();

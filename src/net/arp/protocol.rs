@@ -4,10 +4,9 @@ use spin::Mutex;
 
 use crate::net::{
     arp::arp_struct::{self, ArpPacket},
-    e1000::E1000_DRIVER,
-    ethernet,
     interface::NETWORK_INTERFACE,
 };
+use crate::{kdebug, kwarn};
 
 #[derive(PartialEq)]
 pub enum EntryState {
@@ -44,6 +43,11 @@ pub fn resolve_mac(
 
     drop(table);
 
+    kdebug!(
+        "ARP: sending request for {}.{}.{}.{}",
+        ip_target[0], ip_target[1], ip_target[2], ip_target[3]
+    );
+
     let arp_packet = ArpPacket::new(
         super::arp_struct::ArpOperation::Request,
         sender_hw_address,
@@ -71,6 +75,11 @@ pub fn handle_packet(arp_packet: ArpPacket) {
         };
         if let (Some(our_ip), Some(our_mac)) = (our_ip, our_mac) {
             if arp_packet.target_proto_addr == our_ip {
+                kdebug!(
+                    "ARP: reply to {}.{}.{}.{}",
+                    arp_packet.sender_proto_addr[0], arp_packet.sender_proto_addr[1],
+                    arp_packet.sender_proto_addr[2], arp_packet.sender_proto_addr[3]
+                );
                 let reply = ArpPacket::new(
                     arp_struct::ArpOperation::Reply,
                     our_mac,
@@ -82,6 +91,14 @@ pub fn handle_packet(arp_packet: ArpPacket) {
             }
         }
     } else if arp_packet.operation == arp_struct::ArpOperation::Reply as u16 {
+        let ip = arp_packet.sender_proto_addr;
+        kdebug!(
+            "ARP: resolved {}.{}.{}.{} -> {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            ip[0], ip[1], ip[2], ip[3],
+            arp_packet.sender_hw_addr[0], arp_packet.sender_hw_addr[1],
+            arp_packet.sender_hw_addr[2], arp_packet.sender_hw_addr[3],
+            arp_packet.sender_hw_addr[4], arp_packet.sender_hw_addr[5]
+        );
         let mut table = ArpTable.lock();
         table.insert(
             arp_packet.sender_proto_addr,
@@ -90,6 +107,9 @@ pub fn handle_packet(arp_packet: ArpPacket) {
                 state: EntryState::SOLVED,
             },
         );
+    } else {
+        let op = arp_packet.operation;
+        kwarn!("ARP: unknown operation {}", op);
     }
 }
 

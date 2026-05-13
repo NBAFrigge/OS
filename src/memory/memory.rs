@@ -1,5 +1,6 @@
 use bootloader::bootinfo;
 use core::sync::atomic::{AtomicU64, Ordering};
+use crate::kinfo;
 use x86_64::{
     structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags},
     PhysAddr, VirtAddr,
@@ -21,7 +22,7 @@ pub fn init(memory_map: &'static bootinfo::MemoryMap, offset: u64) {
         heap::init(&mut offset_page_table, allocator).expect("heap initialization failed");
     }
 
-    serial_println!("Memory and Heap initialized successfully");
+    kinfo!("Memory and Heap initialized successfully");
 }
 
 pub static PHYSICAL_MEMORY_OFFSET: AtomicU64 = AtomicU64::new(0);
