@@ -6,7 +6,7 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(naked_functions)]
 
-use core::{ops::Add, panic::PanicInfo};
+use core::panic::PanicInfo;
 #[macro_use]
 mod vgadriver;
 #[macro_use]
@@ -107,7 +107,6 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     #[cfg(test)]
     test_main();
-
     loop {
         x86_64::instructions::hlt();
     }

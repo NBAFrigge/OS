@@ -1,6 +1,12 @@
 use crate::{net::ipv4::protocol::send, vgadriver::writer::WRITER};
 use alloc::vec::Vec;
 use core::ptr::read_unaligned;
+use lazy_static::lazy_static;
+use spin::Mutex;
+
+lazy_static! {
+    pub static ref PING_REPLY: Mutex<Option<([u8; 4], u16)>> = Mutex::new(None);
+}
 
 pub const ICMP_TYPE_ECHO_REPLY: u8 = 0;
 pub const ICMP_TYPE_ECHO_REQUEST: u8 = 8;
@@ -17,7 +23,7 @@ pub struct IcmpPacket {
 
 impl IcmpPacket {
     pub fn new_ping(id: u16, seq: u16, payload: &[u8]) -> Vec<u8> {
-        let mut header = IcmpPacket {
+        let header = IcmpPacket {
             typ: ICMP_TYPE_ECHO_REQUEST,
             code: 0,
             checksum: 0,
@@ -81,19 +87,7 @@ pub fn handle_icmp_packet(src_ip: [u8; 4], payload: &[u8]) {
     if let Some(icmp) = IcmpPacket::from_bytes(payload) {
         match icmp.typ {
             ICMP_TYPE_ECHO_REPLY => {
-                let id = icmp.id;
-                let seq = icmp.sequence;
-
-                print!("\n");
-
-                println!(
-                    "64 bytes from {}.{}.{}.{}: icmp_seq={} ttl=64",
-                    src_ip[0], src_ip[1], src_ip[2], src_ip[3], seq
-                );
-
-                x86_64::instructions::interrupts::without_interrupts(|| {
-                    WRITER.lock().redraw_shell_line();
-                });
+                *PING_REPLY.lock() = Some((src_ip, icmp.sequence));
             }
             ICMP_TYPE_ECHO_REQUEST => {
                 print!("\n");
