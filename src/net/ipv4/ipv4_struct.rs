@@ -47,7 +47,7 @@ impl ip_Header {
     }
 
     pub fn serialize(&self, payload: &[u8], target_buffer: &mut [u8]) -> usize {
-        let header_size = core::mem::size_of::<Self>(); // Sempre 20
+        let header_size = core::mem::size_of::<Self>();
         let total_size = header_size + payload.len();
 
         let header_ptr = self as *const Self as *const u8;

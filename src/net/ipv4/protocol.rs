@@ -19,11 +19,13 @@ pub fn send(src_ip: [u8; 4], src_mac_addr: [u8; 6], dst_ip: [u8; 4], protocol: u
 
     header.calculate_checksum();
 
-    let interface = NETWORK_INTERFACE.lock();
-    let target_ip_for_arp = if interface.is_local(dst_ip) {
-        dst_ip
-    } else {
-        interface.gateway_ip.expect("Gateway IP not configurated")
+    let target_ip_for_arp = {
+        let interface = NETWORK_INTERFACE.lock();
+        if interface.is_local(dst_ip) {
+            dst_ip
+        } else {
+            interface.gateway_ip.expect("Gateway IP not configurated")
+        }
     };
 
     let mac_addr = arp::protocol::resolve_mac(&target_ip_for_arp, src_ip, src_mac_addr);
@@ -34,9 +36,13 @@ pub fn send(src_ip: [u8; 4], src_mac_addr: [u8; 6], dst_ip: [u8; 4], protocol: u
                 .send_ipv4(header, payload, mac_addr);
         }
         None => {
-            print!("ARP still resolving the mac addr")
+            serial_println!(
+                "ARP: Resolving MAC for {:?}, packet dropped",
+                target_ip_for_arp
+            );
         }
     }
 }
 
 pub static IP_PACKET_ID: AtomicU16 = AtomicU16::new(0);
+

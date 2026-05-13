@@ -34,7 +34,14 @@ impl Interface {
 
         let ip_data_size = header.serialize(payload, &mut self.tx_buffer[14..]);
 
-        let total_size = 14 + ip_data_size;
+        let mut total_size = 14 + ip_data_size;
+
+        if total_size < 60 {
+            for i in total_size..60 {
+                self.tx_buffer[i] = 0;
+            }
+            total_size = 60;
+        }
 
         if let Some(ref mut nic) = *E1000_DRIVER.lock() {
             nic.send(&self.tx_buffer[..total_size]);
@@ -63,7 +70,6 @@ impl Interface {
 
         if let Some(ref mut nic) = *E1000_DRIVER.lock() {
             nic.send(&self.tx_buffer[..total_size]);
-            serial_println!("ARP: Packet sent ({} bytes)", total_size);
         }
     }
 }

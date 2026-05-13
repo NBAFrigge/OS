@@ -41,8 +41,6 @@ pub fn resolve_mac(
     );
 
     NETWORK_INTERFACE.lock().send_arp(&arp_packet);
-    serial_println!("ARP SENT");
-
     {
         let mut table = ArpTable.lock();
         table.insert(
@@ -58,7 +56,6 @@ pub fn resolve_mac(
 }
 
 pub fn handle_packet(arp_packet: ArpPacket) {
-    serial_println!("DEBUG: Received ARP packet");
     if arp_packet.operation == 2 {
         x86_64::instructions::interrupts::without_interrupts(|| {
             let mut table = ArpTable.lock();
