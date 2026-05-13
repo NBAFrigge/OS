@@ -1,5 +1,3 @@
-use crate::net::interface::NETWORK_INTERFACE;
-use crate::net::ipv4;
 use alloc::vec::Vec;
 
 pub struct UdpPacketData {
