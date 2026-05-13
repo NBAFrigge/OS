@@ -2,7 +2,11 @@ use alloc::string::String;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::{command_handler::command_handler::run_command, shell::parser::parser, vgadriver};
+use crate::{
+    command_handler::command_handler::run_command,
+    shell::parser::parser,
+    vgadriver::writer::WRITER,
+};
 
 pub struct Shell {
     pub buffer: String,
@@ -60,10 +64,28 @@ impl Shell {
 
 pub extern "C" fn shell_task() -> ! {
     loop {
+        let cmd = x86_64::instructions::interrupts::without_interrupts(|| {
+            PENDING_COMMAND.lock().take()
+        });
+
+        if let Some(cmd) = cmd {
+            if !cmd.trim().is_empty() {
+                if let Some((c, args)) = parser(&cmd) {
+                    run_command(c, args);
+                } else {
+                    run_command(cmd.trim(), "");
+                }
+            }
+            x86_64::instructions::interrupts::without_interrupts(|| {
+                WRITER.lock().redraw_shell_line();
+            });
+        }
+
         x86_64::instructions::hlt();
     }
 }
 
 lazy_static! {
     pub static ref SHELL: Mutex<Shell> = Mutex::new(Shell::new());
+    pub static ref PENDING_COMMAND: Mutex<Option<String>> = Mutex::new(None);
 }

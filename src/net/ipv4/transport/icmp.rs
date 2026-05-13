@@ -91,12 +91,16 @@ pub fn handle_icmp_packet(src_ip: [u8; 4], payload: &[u8]) {
                     src_ip[0], src_ip[1], src_ip[2], src_ip[3], seq
                 );
 
-                WRITER.lock().redraw_shell_line();
+                x86_64::instructions::interrupts::without_interrupts(|| {
+                    WRITER.lock().redraw_shell_line();
+                });
             }
             ICMP_TYPE_ECHO_REQUEST => {
                 print!("\n");
                 println!("ICMP: Echo Request receveid from {:?}", src_ip);
-                WRITER.lock().redraw_shell_line();
+                x86_64::instructions::interrupts::without_interrupts(|| {
+                    WRITER.lock().redraw_shell_line();
+                });
 
                 reply_to_ping(src_ip, icmp, &payload[8..]);
             }
