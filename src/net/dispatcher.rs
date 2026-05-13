@@ -9,21 +9,19 @@ use crate::net::{
 };
 
 pub fn poll_network() {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        if let Some(ref mut nic) = *E1000_DRIVER.lock() {
-            let mut interface = NETWORK_INTERFACE.lock();
-            while let Some(frame_bytes) = nic.receive() {
-                interface.rx_queue.push_back(frame_bytes.to_vec());
-            }
+    if let Some(ref mut nic) = *E1000_DRIVER.lock() {
+        let mut interface = NETWORK_INTERFACE.lock();
+        while let Some(frame_bytes) = nic.receive() {
+            interface.rx_queue.push_back(frame_bytes.to_vec());
+        }
 
-            while let Some(frame) = interface.tx_queue.pop_front() {
-                if !nic.send(&frame) {
-                    interface.tx_queue.push_front(frame);
-                    break;
-                }
+        while let Some(frame) = interface.tx_queue.pop_front() {
+            if !nic.send(&frame) {
+                interface.tx_queue.push_front(frame);
+                break;
             }
         }
-    });
+    }
     while !NETWORK_INTERFACE.lock().rx_queue.is_empty() {
         let frame_bytes = NETWORK_INTERFACE.lock().rx_queue.pop_front();
         if let Some(decoded_frame) = ethernet::parse(&frame_bytes.unwrap()) {
