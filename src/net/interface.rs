@@ -37,10 +37,11 @@ impl Interface {
     }
 
     pub fn send_arp(&mut self, arp_packet: &ArpPacket) {
-        let broadcast = [0xFF; 6];
-        let arp_bytes = arp_packet.as_bytes();
+        self.send_arp_to(arp_packet, [0xFF; 6]);
+    }
 
-        self.send_ethernet(broadcast, [0x08, 0x06], arp_bytes);
+    pub fn send_arp_to(&mut self, arp_packet: &ArpPacket, dst_mac: [u8; 6]) {
+        self.send_ethernet(dst_mac, [0x08, 0x06], arp_packet.as_bytes());
     }
 
     fn send_ethernet(&mut self, dest_mac: [u8; 6], ether_type: [u8; 2], payload: &[u8]) {

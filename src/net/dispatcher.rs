@@ -1,11 +1,12 @@
-use alloc::borrow::ToOwned;
-
 use crate::net::{
     arp,
     e1000::E1000_DRIVER,
     ethernet,
     interface::NETWORK_INTERFACE,
-    ipv4::{ipv4_struct::ip_Header, transport::icmp::handle_icmp_packet},
+    ipv4::{
+        ipv4_struct::ip_Header,
+        transport::{icmp::icmp::handle_icmp_packet, udp::socket::handle_udp_packet},
+    },
 };
 
 pub fn poll_network() {
@@ -45,6 +46,10 @@ pub fn poll_network() {
                         1 => {
                             // ICMP
                             handle_icmp_packet(ip_header.src_ip, payload);
+                        }
+                        17 => {
+                            // UDP
+                            handle_udp_packet(&ip_header.src_ip, payload);
                         }
                         _ => {}
                     }

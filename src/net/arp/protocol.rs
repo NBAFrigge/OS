@@ -64,7 +64,24 @@ pub fn is_resolved(ip: &[u8; 4]) -> bool {
 }
 
 pub fn handle_packet(arp_packet: ArpPacket) {
-    if arp_packet.operation == arp_struct::ArpOperation::Reply as u16 {
+    if arp_packet.operation == arp_struct::ArpOperation::Request as u16 {
+        let (our_ip, our_mac) = {
+            let iface = NETWORK_INTERFACE.lock();
+            (iface.ip_addr, iface.hw_addr)
+        };
+        if let (Some(our_ip), Some(our_mac)) = (our_ip, our_mac) {
+            if arp_packet.target_proto_addr == our_ip {
+                let reply = ArpPacket::new(
+                    arp_struct::ArpOperation::Reply,
+                    our_mac,
+                    our_ip,
+                    arp_packet.sender_hw_addr,
+                    arp_packet.sender_proto_addr,
+                );
+                NETWORK_INTERFACE.lock().send_arp_to(&reply, arp_packet.sender_hw_addr);
+            }
+        }
+    } else if arp_packet.operation == arp_struct::ArpOperation::Reply as u16 {
         let mut table = ArpTable.lock();
         table.insert(
             arp_packet.sender_proto_addr,

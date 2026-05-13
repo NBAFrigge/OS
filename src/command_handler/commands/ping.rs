@@ -6,7 +6,7 @@ use crate::idt::interrupt::TICKS;
 use crate::net::arp;
 use crate::net::interface::NETWORK_INTERFACE;
 use crate::net::ipv4::protocol;
-use crate::net::ipv4::transport::icmp::{IcmpPacket, PING_REPLY};
+use crate::net::ipv4::transport::icmp::icmp::{IcmpPacket, PING_REPLY};
 use crate::task::task::sleep;
 
 pub fn cmd_ping(args: &str) {
