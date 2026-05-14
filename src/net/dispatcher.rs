@@ -1,3 +1,4 @@
+use crate::ktrace;
 use crate::net::{
     arp,
     e1000::E1000_DRIVER,
@@ -8,7 +9,6 @@ use crate::net::{
         transport::{icmp::icmp::handle_icmp_packet, udp::socket::handle_udp_packet},
     },
 };
-use crate::ktrace;
 
 pub fn poll_network() {
     if let Some(ref mut nic) = *E1000_DRIVER.lock() {
@@ -38,10 +38,32 @@ pub fn poll_network() {
                 }
                 0x0800 => {
                     // IPV4
-                    let ip_header =
-                        unsafe { &*(decoded_frame.payload.as_ptr() as *const ip_Header) };
+                    if decoded_frame.payload.len() < 20 {
+                        ktrace!("IPv4: frame too short ({} bytes)", decoded_frame.payload.len());
+                        continue;
+                    }
 
-                    let payload = &decoded_frame.payload[20..];
+                    let ip_header = unsafe {
+                        core::ptr::read_unaligned(decoded_frame.payload.as_ptr() as *const ip_Header)
+                    };
+
+                    let header_len = (ip_header.ihl() * 4) as usize;
+                    let total_len = u16::from_be(ip_header.total_length) as usize;
+
+                    if header_len < 20 {
+                        ktrace!("IPv4: invalid IHL {}", ip_header.ihl());
+                        continue;
+                    }
+                    if decoded_frame.payload.len() < header_len {
+                        ktrace!("IPv4: payload shorter than IHL ({} < {})", decoded_frame.payload.len(), header_len);
+                        continue;
+                    }
+                    if total_len < header_len || decoded_frame.payload.len() < total_len {
+                        ktrace!("IPv4: invalid total_length {} (buf={}, hdr={})", total_len, decoded_frame.payload.len(), header_len);
+                        continue;
+                    }
+
+                    let payload = &decoded_frame.payload[header_len..total_len];
 
                     match ip_header.protocol {
                         1 => {
@@ -58,7 +80,10 @@ pub fn poll_network() {
                     }
                 }
                 _ => {
-                    ktrace!("Ethernet: unknown ethertype 0x{:04X}", decoded_frame.ether_type);
+                    ktrace!(
+                        "Ethernet: unknown ethertype 0x{:04X}",
+                        decoded_frame.ether_type
+                    );
                 }
             }
         }
