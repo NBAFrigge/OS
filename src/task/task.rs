@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use core::arch::asm;
 use x86_64::structures::idt::InterruptStackFrame;
 
-use crate::idt::interrupt::TICKS;
+use crate::{idt::interrupt::TICKS, task::task_manager::GLOBAL_TASK_MANAGER};
 
 const STACK_CAPACITY: usize = 1024 * 16; // 16 kib
 
@@ -11,6 +11,7 @@ pub enum State {
     Ready,
     Running,
     Waiting,
+    Terminated,
 }
 
 pub struct Task {
