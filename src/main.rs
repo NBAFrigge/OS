@@ -13,6 +13,7 @@ mod vgadriver;
 mod serial;
 #[macro_use]
 mod logger;
+mod crypto;
 mod net;
 
 use bootloader::{entry_point, BootInfo};
@@ -21,6 +22,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::{
+    crypto::random::GLOBAL_ENTROPY,
     net::{
         dispatcher::network_task_entry,
         e1000::{E1000, E1000_DRIVER},
@@ -103,6 +105,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             manager.current_task = Some(first);
         }
     });
+
+    {
+        let mut pool = GLOBAL_ENTROPY.lock();
+        pool.init();
+    }
+
+    kinfo!("Entropy pool initialized.");
 
     kinfo!("Setup Finished");
     println!("Kernel Loaded");

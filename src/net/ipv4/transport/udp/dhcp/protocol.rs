@@ -1,6 +1,7 @@
 use core::sync::atomic::Ordering;
 
 use crate::{
+    crypto::random::generate_u32,
     idt::interrupt::TICKS,
     kdebug, kerror,
     net::{
@@ -134,7 +135,7 @@ pub fn dhcp_task() {
 
     loop {
         kdebug!("DHCP: starting DORA");
-        let xid = get_random_u32();
+        let xid = generate_u32();
         discover(xid);
 
         if let Some((requested_ip, server_ip)) = handle_offer(xid) {
@@ -192,9 +193,4 @@ pub fn dhcp_task() {
     loop {
         sleep(10000);
     }
-}
-
-// TODO: replace with a real random lib
-fn get_random_u32() -> u32 {
-    unsafe { core::arch::x86_64::_rdtsc() as u32 }
 }

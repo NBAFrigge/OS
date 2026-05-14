@@ -1,8 +1,9 @@
-use core::sync::atomic::Ordering;
+use core::sync::atomic::{AtomicU16, Ordering};
 
 use alloc::{string::ToString, vec::Vec};
 
 use crate::{
+    crypto::random::generate_u16,
     idt::interrupt::TICKS,
     kdebug, kerror,
     net::{
@@ -22,8 +23,19 @@ use crate::{
     task::task::sleep,
 };
 
-// TODO: generate a random port 49152-65535
-const DNS_PORT: u16 = 49152;
+static DNS_PORT: AtomicU16 = AtomicU16::new(0);
+
+fn get_dns_port() -> u16 {
+    let port = DNS_PORT.load(Ordering::Relaxed);
+    if port != 0 {
+        return port;
+    }
+    let new_port = 49152 + (generate_u16() % 16384);
+    match DNS_PORT.compare_exchange(0, new_port, Ordering::Relaxed, Ordering::Relaxed) {
+        Ok(_) => new_port,
+        Err(existing) => existing,
+    }
+}
 
 pub struct DnsResolver;
 
@@ -35,17 +47,18 @@ impl DnsResolver {
         }
 
         {
+            let port = get_dns_port();
             let mut manager = UDP_SOCKET_MANAGER.lock();
-            if manager.get(&49152).is_none() {
-                manager.insert(49152, udp::socket::create_socket(49152));
-                kdebug!("DNS: Socket auto-initialized on port 49152");
+            if manager.get(&port).is_none() {
+                manager.insert(port, udp::socket::create_socket(port));
+                kdebug!("DNS: Socket auto-initialized on port {}", port);
             }
         }
 
         kdebug!("DNS: resolving {}", domain);
 
         let dns_addr = NETWORK_INTERFACE.lock().dns.expect("dns not set");
-        let id = get_random_u16();
+        let id = generate_u16();
 
         let packet = build_query(domain, id);
         for attempt in 0..3 {
@@ -183,9 +196,10 @@ fn skip_question_section(payload: &[u8]) -> usize {
 }
 
 fn get_socket() -> alloc::sync::Arc<spin::Mutex<udp::socket::UdpSocket>> {
+    let port = get_dns_port();
     loop {
         let manager = UDP_SOCKET_MANAGER.lock();
-        if let Some(socket_arc) = manager.get(&DNS_PORT).cloned() {
+        if let Some(socket_arc) = manager.get(&port).cloned() {
             return socket_arc;
         }
         drop(manager);
@@ -203,8 +217,4 @@ fn parse_to_label_length(domain: &str) -> Vec<u8> {
         .collect();
     encoded.push(0);
     encoded
-}
-
-fn get_random_u16() -> u16 {
-    unsafe { core::arch::x86_64::_rdtsc() as u16 }
 }

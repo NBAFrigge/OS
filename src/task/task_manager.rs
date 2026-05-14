@@ -10,8 +10,6 @@ use crate::{
 
 const MAX_THREAD: usize = 20;
 
-// TODO: add a exit_task method
-
 pub struct TaskManager {
     pub task_list: VecDeque<Box<Task>>,
     pub current_task: Option<Box<Task>>,
