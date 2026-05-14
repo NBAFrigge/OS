@@ -11,6 +11,8 @@ use crate::command_handler::commands::loglevel::{cmd_get_loglevel, cmd_set_logle
 use crate::command_handler::commands::lspci::cmd_lspci;
 use crate::command_handler::commands::paging::cmd_paging;
 use crate::command_handler::commands::ping::cmd_ping;
+use crate::command_handler::commands::pkill::cmd_pkill;
+use crate::command_handler::commands::ps::cmd_ps;
 use crate::command_handler::commands::sleep::cmd_sleep;
 use crate::command_handler::commands::udplisten::cmd_udplisten;
 
@@ -66,6 +68,14 @@ pub fn init_commands() {
     registry.push(Command {
         name: "getloglevel",
         func: cmd_get_loglevel,
+    });
+    registry.push(Command {
+        name: "ps",
+        func: cmd_ps,
+    });
+    registry.push(Command {
+        name: "pkill",
+        func: cmd_pkill,
     });
 }
 

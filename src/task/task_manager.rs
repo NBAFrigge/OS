@@ -4,6 +4,7 @@ use spin::Mutex;
 
 use crate::{
     idt::interrupt::TICKS,
+    kinfo, kwarn,
     task::task::{self, Task},
 };
 
@@ -96,10 +97,20 @@ impl TaskManager {
         }
     }
 
+    pub fn list_tasks(&self) {
+        if let Some(task) = &self.current_task {
+            println!("ID: {} | State: {:?} (Current)", task.id, task.state);
+        }
+        for task in &self.task_list {
+            println!("ID: {} | State: {:?}", task.id, task.state);
+        }
+    }
+
     pub fn kill_task(&mut self, id: u8) -> bool {
         for task in self.task_list.iter_mut() {
             if task.id == id {
                 task.state = task::State::Terminated;
+                kinfo!("task {} terminated", id);
                 return true;
             }
         }
@@ -107,10 +118,12 @@ impl TaskManager {
         if let Some(task) = self.current_task.as_mut() {
             if task.id == id {
                 task.state = task::State::Terminated;
+                kinfo!("task {} terminated (was current)", id);
                 return true;
             }
         }
 
+        kwarn!("kill_task: task {} not found", id);
         false
     }
 }

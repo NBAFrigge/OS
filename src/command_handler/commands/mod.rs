@@ -6,5 +6,7 @@ pub mod loglevel;
 pub mod lspci;
 pub mod paging;
 pub mod ping;
+pub mod pkill;
+pub mod ps;
 pub mod sleep;
 pub mod udplisten;

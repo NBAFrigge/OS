@@ -101,6 +101,16 @@ pub fn sleep(ms: u64) {
     yield_now();
 }
 
+pub fn exit_current_task() {
+    {
+        let mut manager = GLOBAL_TASK_MANAGER.lock();
+        if let Some(task) = manager.current_task.as_mut() {
+            task.state = State::Terminated;
+        }
+    }
+    yield_now();
+}
+
 pub extern "C" fn idle_task() -> ! {
     loop {
         unsafe {
