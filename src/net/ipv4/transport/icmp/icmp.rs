@@ -121,8 +121,8 @@ pub fn reply_to_ping(target_ip: [u8; 4], request: IcmpPacket, data: &[u8]) {
         typ: ICMP_TYPE_ECHO_REPLY,
         code: 0,
         checksum: 0,
-        id: request.id,
-        sequence: request.sequence,
+        id: request.id.to_be(),
+        sequence: request.sequence.to_be(),
     };
 
     let mut full_payload = Vec::with_capacity(8 + data.len());

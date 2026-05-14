@@ -65,6 +65,14 @@ pub fn poll_network() {
 
                     let payload = &decoded_frame.payload[header_len..total_len];
 
+                    let flags_fragment = u16::from_be(ip_header.flags_fragment);
+                    let more_fragments = (flags_fragment & 0x2000) != 0;
+                    let fragment_offset = flags_fragment & 0x1FFF;
+                    if more_fragments || fragment_offset != 0 {
+                        ktrace!("IPv4: fragmented packet dropped (flags={:#x} offset={})", flags_fragment >> 13, fragment_offset);
+                        continue;
+                    }
+
                     match ip_header.protocol {
                         1 => {
                             // ICMP
