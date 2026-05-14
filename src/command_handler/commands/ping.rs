@@ -2,24 +2,33 @@ use core::sync::atomic::Ordering;
 
 use alloc::vec::Vec;
 
-use crate::idt::interrupt::TICKS;
-use crate::net::arp;
-use crate::net::interface::NETWORK_INTERFACE;
-use crate::net::ipv4::protocol;
-use crate::net::ipv4::transport::icmp::icmp::{IcmpPacket, PING_REPLY};
-use crate::task::task::sleep;
+use crate::{
+    idt::interrupt::TICKS,
+    net::{
+        arp,
+        interface::NETWORK_INTERFACE,
+        ipv4::{
+            protocol,
+            transport::{
+                icmp::icmp::{IcmpPacket, PING_REPLY},
+                udp::dns::solver::DnsResolver,
+            },
+        },
+    },
+    task::task::sleep,
+};
 
 pub fn cmd_ping(args: &str) {
     let args_list: Vec<&str> = args.split_whitespace().collect();
     if args_list.is_empty() {
-        println!("Usage: ping <ip_address>");
+        println!("Usage: ping <hostname/ip>");
         return;
     }
 
-    let target_ip = match parse_ip(args_list[0]) {
+    let target_ip = match resolve_target(args_list[0]) {
         Some(ip) => ip,
         None => {
-            println!("ping: invalid address '{}'", args_list[0]);
+            println!("ping: unknown host {}", args_list[0]);
             return;
         }
     };
@@ -34,13 +43,12 @@ pub fn cmd_ping(args: &str) {
     };
 
     println!(
-        "PING {}.{}.{}.{}",
-        target_ip[0], target_ip[1], target_ip[2], target_ip[3]
+        "PING {} ({}.{}.{}.{})",
+        args_list[0], target_ip[0], target_ip[1], target_ip[2], target_ip[3]
     );
 
     if !arp::protocol::is_resolved(&target_ip_for_arp) {
         protocol::send(target_ip, 1, &[]);
-
         let mut resolved = false;
         for _ in 0..50 {
             sleep(10);
@@ -58,6 +66,7 @@ pub fn cmd_ping(args: &str) {
     let payload = TICKS.load(Ordering::Relaxed);
     let payload_bytes = payload.to_ne_bytes();
     let ping_data = IcmpPacket::new_ping(0x1234, 1, &payload_bytes);
+
     *PING_REPLY.lock() = None;
     protocol::send(target_ip, 1, &ping_data);
 
@@ -76,6 +85,13 @@ pub fn cmd_ping(args: &str) {
     }
 
     println!("Request timeout");
+}
+
+fn resolve_target(target: &str) -> Option<[u8; 4]> {
+    if let Some(ip) = parse_ip(target) {
+        return Some(ip);
+    }
+    DnsResolver.get(target)
 }
 
 fn parse_ip(ip_str: &str) -> Option<[u8; 4]> {

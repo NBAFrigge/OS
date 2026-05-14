@@ -156,13 +156,29 @@ pub fn dhcp_task() {
                 interface.dns = Some(dns);
                 drop(interface);
 
+                kdebug!("DHCP: Network fully configured!");
                 kdebug!(
-                    "DHCP: bound to {}.{}.{}.{}",
+                    "IP:      {}.{}.{}.{}",
                     assigned_ip[0],
                     assigned_ip[1],
                     assigned_ip[2],
                     assigned_ip[3]
                 );
+                kdebug!(
+                    "Mask:    {}.{}.{}.{}",
+                    subnet_mask[0],
+                    subnet_mask[1],
+                    subnet_mask[2],
+                    subnet_mask[3]
+                );
+                kdebug!(
+                    "Gateway: {}.{}.{}.{}",
+                    gateway[0],
+                    gateway[1],
+                    gateway[2],
+                    gateway[3]
+                );
+                kdebug!("DNS:     {}.{}.{}.{}", dns[0], dns[1], dns[2], dns[3]);
                 break;
             } else {
                 kerror!("DHCP: ACK timeout, retrying...");
