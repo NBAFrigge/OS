@@ -27,6 +27,7 @@ pub fn get_from_cache(domain: &str) -> Option<[u8; 4]> {
             kdebug!("DNS: Cache entry for {} expired", domain);
             return None;
         }
+        return Some(entry.ip);
     }
 
     None
