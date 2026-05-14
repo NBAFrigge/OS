@@ -69,7 +69,9 @@ pub fn create_socket(port: u16) -> Arc<Mutex<UdpSocket>> {
 pub fn handle_udp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
     let header_bytes = &raw_packet[0..8];
     let header = UdpHeader::from_bytes(header_bytes);
-    let payload_len = (header.length as usize).saturating_sub(8).min(raw_packet.len() - 8);
+    let payload_len = (header.length as usize)
+        .saturating_sub(8)
+        .min(raw_packet.len() - 8);
     let payload = &raw_packet[8..8 + payload_len];
 
     let dst_ip = NETWORK_INTERFACE.lock().ip_addr.expect("IP not set");
