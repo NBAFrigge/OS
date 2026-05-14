@@ -25,9 +25,10 @@ use crate::{
         dispatcher::network_task_entry,
         e1000::{E1000, E1000_DRIVER},
         interface::NETWORK_INTERFACE,
+        ipv4::transport::udp::dhcp::protocol::dhcp_task,
     },
     shell::shell::shell_task,
-    task::task::idle_task,
+    task::task::{idle_task, Task},
     vgadriver::writer::WRITER,
 };
 
@@ -74,9 +75,20 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     });
     *E1000_DRIVER.lock() = Some(e1000);
 
-    let idle = crate::task::task::Task::new(0, idle_task as u64);
-    let shell = crate::task::task::Task::new(1, shell_task as u64);
-    let network_poll = crate::task::task::Task::new(2, network_task_entry as u64);
+    if let Some(ref nic) = *E1000_DRIVER.lock() {
+        NETWORK_INTERFACE.lock().hw_addr = Some(nic.mac)
+    } else {
+        println!("Error: NIC not initialized");
+    };
+    NETWORK_INTERFACE.lock().ip_addr = Some([0, 0, 0, 0]);
+    NETWORK_INTERFACE.lock().subnet_mask = Some([0, 0, 0, 0]);
+    NETWORK_INTERFACE.lock().gateway_ip = Some([0, 0, 0, 0]);
+    NETWORK_INTERFACE.lock().dns = Some([0, 0, 0, 0]);
+
+    let idle = Task::new(0, idle_task as u64);
+    let shell = Task::new(1, shell_task as u64);
+    let network_poll = Task::new(2, network_task_entry as u64);
+    let dhcp = Task::new(3, dhcp_task as u64);
 
     x86_64::instructions::interrupts::without_interrupts(|| {
         let mut manager = crate::task::task_manager::GLOBAL_TASK_MANAGER.lock();
@@ -85,20 +97,12 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         manager
             .task_list
             .push_back(alloc::boxed::Box::new(network_poll));
+        manager.task_list.push_back(alloc::boxed::Box::new(dhcp));
 
         if let Some(first) = manager.task_list.pop_front() {
             manager.current_task = Some(first);
         }
     });
-
-    if let Some(ref nic) = *E1000_DRIVER.lock() {
-        NETWORK_INTERFACE.lock().hw_addr = Some(nic.mac)
-    } else {
-        println!("Error: NIC not initialized");
-    };
-    NETWORK_INTERFACE.lock().ip_addr = Some([10, 0, 2, 15]);
-    NETWORK_INTERFACE.lock().subnet_mask = Some([255, 255, 255, 0]);
-    NETWORK_INTERFACE.lock().gateway_ip = Some([10, 0, 2, 2]);
 
     kinfo!("Setup Finished");
     println!("Kernel Loaded");

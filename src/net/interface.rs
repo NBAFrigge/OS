@@ -9,12 +9,25 @@ pub struct Interface {
     pub ip_addr: Option<[u8; 4]>,
     pub subnet_mask: Option<[u8; 4]>,
     pub gateway_ip: Option<[u8; 4]>,
+    pub dns: Option<[u8; 4]>,
     tx_buffer: [u8; 1514],
     pub rx_queue: VecDeque<Vec<u8>>,
     pub tx_queue: VecDeque<Vec<u8>>,
 }
 
 impl Interface {
+    pub fn new() -> Self {
+        Interface {
+            hw_addr: None,
+            ip_addr: None,
+            subnet_mask: None,
+            gateway_ip: None,
+            dns: None,
+            tx_buffer: [0u8; 1514],
+            rx_queue: VecDeque::new(),
+            tx_queue: VecDeque::new(),
+        }
+    }
     pub fn is_local(&self, target_ip: [u8; 4]) -> bool {
         if let (Some(ip), Some(mask)) = (self.ip_addr, self.subnet_mask) {
             for i in 0..4 {
@@ -66,13 +79,5 @@ impl Interface {
 }
 
 lazy_static! {
-    pub static ref NETWORK_INTERFACE: Mutex<Interface> = Mutex::new(Interface {
-        hw_addr: None,
-        ip_addr: None,
-        subnet_mask: None,
-        gateway_ip: None,
-        tx_buffer: [0u8; 1514],
-        rx_queue: VecDeque::new(),
-        tx_queue: VecDeque::new()
-    });
+    pub static ref NETWORK_INTERFACE: Mutex<Interface> = Mutex::new(Interface::new());
 }
