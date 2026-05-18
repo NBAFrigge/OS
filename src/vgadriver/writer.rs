@@ -144,24 +144,28 @@ impl Writer {
         }
     }
 
-    // In src/vgadriver/writer.rs
-
     pub fn redraw_shell_line(&mut self) {
+        let mut print_bash = true;
         let (content, shell_index) = {
             let shell = SHELL.lock();
+            if shell.on_tick != None {
+                print_bash = false;
+            }
             (shell.buffer.clone(), shell.index as usize)
         };
 
         self.clear_row(self.row_position);
 
         self.column_position = 0;
-        self.write_byte_raw(b'>');
+        if print_bash {
+            self.write_byte_raw(b'>');
+        }
 
         for byte in content.bytes() {
             self.write_byte_raw(byte);
         }
 
-        self.column_position = shell_index + 1;
+        self.column_position = shell_index + if print_bash { 1 } else { 0 };
         self.update_cursor();
     }
 
