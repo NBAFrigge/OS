@@ -1,10 +1,22 @@
 use alloc::vec::Vec;
-use core::net::IpAddr;
+use lazy_static::lazy_static;
+use spin::mutex::Mutex;
 
-use crate::shell::shell::{HandlerResult, SHELL};
+use crate::{
+    net::ipv4::transport::tcp::{
+        self,
+        socket::{TcpTuple, TCP_SOCKET_MANAGER},
+    },
+    shell::shell::{HandlerResult, SHELL},
+};
+
+struct Context {
+    local_port: u16,
+    remote_ip: [u8; 4],
+    remote_port: u16,
+}
 
 pub fn cmd_netcat(args: &str) {
-    let args_list: Vec<&str> = args.split_whitespace().collect();
     let mut parts = args.split_whitespace();
 
     let Some(ip_str) = parts.next() else {
@@ -13,27 +25,92 @@ pub fn cmd_netcat(args: &str) {
     };
 
     let Some(port_str) = parts.next() else {
+        println!("usage: nc <ip> <port>");
         return;
     };
 
-    let Ok(ip) = ip_str.parse::<IpAddr>() else {
+    let Some(remote_ip) = parse_ip(ip_str) else {
+        println!("invalid ip address");
         return;
     };
 
-    let Ok(port) = port_str.parse::<u16>() else {
+    let Ok(remote_port) = port_str.parse::<u16>() else {
+        println!("invalid port");
         return;
     };
+
+    let local_port = tcp::socket::connect(&remote_ip, remote_port);
+    let mut c = CONTEXT.lock();
+    c.local_port = local_port;
+    c.remote_ip = remote_ip;
+    c.remote_port = remote_port;
+    drop(c);
 
     let mut shell = SHELL.lock();
     shell.on_tick = Some(nc_on_tick);
     shell.on_input = Some(nc_on_input);
+    drop(shell);
 }
 
 fn nc_on_tick() -> HandlerResult {
-    return HandlerResult::Continue;
+    let c = CONTEXT.lock();
+    let key = TcpTuple {
+        remote_ip: c.remote_ip,
+        remote_port: c.remote_port,
+        local_port: c.local_port,
+    };
+    drop(c);
+
+    let manager = TCP_SOCKET_MANAGER.lock();
+    if let Some(socket) = manager.get(&key) {
+        let mut buf = [0u8; 512];
+        let n = socket.lock().read(&mut buf);
+        if n > 0 {
+            if let Ok(text) = core::str::from_utf8(&buf[..n]) {
+                print!("{}", text);
+            }
+        }
+    }
+
+    HandlerResult::Continue
 }
 
 fn nc_on_input(data: &str) -> HandlerResult {
-    println!("received {}", data);
-    return HandlerResult::Continue;
+    if data.trim() == "exit" {
+        return HandlerResult::Done;
+    }
+    let c = CONTEXT.lock();
+    let key = TcpTuple {
+        remote_ip: c.remote_ip,
+        remote_port: c.remote_port,
+        local_port: c.local_port,
+    };
+    drop(c);
+    let paylaod = data.as_bytes();
+
+    let manager = TCP_SOCKET_MANAGER.lock();
+    if let Some(socket) = manager.get(&key) {
+        socket.lock().write(paylaod);
+    }
+    HandlerResult::Continue
+}
+
+fn parse_ip(ip_str: &str) -> Option<[u8; 4]> {
+    let parts: Vec<&str> = ip_str.split('.').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let mut ip = [0u8; 4];
+    for (i, part) in parts.iter().enumerate() {
+        ip[i] = part.parse::<u8>().ok()?;
+    }
+    Some(ip)
+}
+
+lazy_static! {
+    static ref CONTEXT: Mutex<Context> = Mutex::new(Context {
+        local_port: 0,
+        remote_ip: [0, 0, 0, 0],
+        remote_port: 0,
+    });
 }
