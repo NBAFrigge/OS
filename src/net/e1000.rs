@@ -1,7 +1,6 @@
 use crate::drivers::pci::PciAddress;
-use crate::memory::frame_allocator::FRAME_ALLOCATOR;
 use crate::memory::memory::PHYSICAL_MEMORY_OFFSET;
-use alloc::vec;
+use crate::{kinfo, kwarn};
 use alloc::vec::Vec;
 use core::ptr::{read_volatile, write_volatile};
 use core::sync::atomic::Ordering;
@@ -217,6 +216,16 @@ impl E1000 {
 
         drop(allocator_guard);
 
+        kinfo!(
+            "E1000 initialized, MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            mac[0],
+            mac[1],
+            mac[2],
+            mac[3],
+            mac[4],
+            mac[5]
+        );
+
         Ok(E1000 {
             base_addr,
             mac,
@@ -248,8 +257,15 @@ impl E1000 {
 
     pub fn send(&mut self, frame: &[u8]) -> bool {
         if self.is_tx_ring_full() {
+            kwarn!("TX ring full, dropping frame");
             return false;
         }
+
+        if frame.len() > BUFFER_SIZE {
+            kwarn!("frame too long: {} bytes", frame.len());
+            return false;
+        }
+
         self.tx_buffers[self.tx_tail as usize][..frame.len()].copy_from_slice(frame);
         self.tx_ring[self.tx_tail as usize].length = frame.len() as u16;
         self.tx_ring[self.tx_tail as usize].cmd = CMD_EOP_IFCS_RS;

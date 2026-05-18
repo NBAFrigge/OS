@@ -2,19 +2,35 @@ use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::net::{arp::arp_struct::ArpPacket, ipv4::ipv4_struct::ip_Header};
+use crate::{
+    kerror,
+    net::{arp::arp_struct::ArpPacket, ipv4::ipv4_struct::ip_Header},
+};
 
 pub struct Interface {
     pub hw_addr: Option<[u8; 6]>,
     pub ip_addr: Option<[u8; 4]>,
     pub subnet_mask: Option<[u8; 4]>,
     pub gateway_ip: Option<[u8; 4]>,
+    pub dns: Option<[u8; 4]>,
     tx_buffer: [u8; 1514],
     pub rx_queue: VecDeque<Vec<u8>>,
     pub tx_queue: VecDeque<Vec<u8>>,
 }
 
 impl Interface {
+    pub fn new() -> Self {
+        Interface {
+            hw_addr: None,
+            ip_addr: None,
+            subnet_mask: None,
+            gateway_ip: None,
+            dns: None,
+            tx_buffer: [0u8; 1514],
+            rx_queue: VecDeque::new(),
+            tx_queue: VecDeque::new(),
+        }
+    }
     pub fn is_local(&self, target_ip: [u8; 4]) -> bool {
         if let (Some(ip), Some(mask)) = (self.ip_addr, self.subnet_mask) {
             for i in 0..4 {
@@ -37,10 +53,11 @@ impl Interface {
     }
 
     pub fn send_arp(&mut self, arp_packet: &ArpPacket) {
-        let broadcast = [0xFF; 6];
-        let arp_bytes = arp_packet.as_bytes();
+        self.send_arp_to(arp_packet, [0xFF; 6]);
+    }
 
-        self.send_ethernet(broadcast, [0x08, 0x06], arp_bytes);
+    pub fn send_arp_to(&mut self, arp_packet: &ArpPacket, dst_mac: [u8; 6]) {
+        self.send_ethernet(dst_mac, [0x08, 0x06], arp_packet.as_bytes());
     }
 
     fn send_ethernet(&mut self, dest_mac: [u8; 6], ether_type: [u8; 2], payload: &[u8]) {
@@ -50,6 +67,10 @@ impl Interface {
         self.tx_buffer[12..14].copy_from_slice(&ether_type);
 
         let payload_len = payload.len();
+        if payload_len > 1514 {
+            kerror!("Ethernet packet payload too long: {} bytes", payload_len);
+            return;
+        }
         self.tx_buffer[14..14 + payload_len].copy_from_slice(payload);
 
         let mut total_size = 14 + payload_len;
@@ -65,13 +86,5 @@ impl Interface {
 }
 
 lazy_static! {
-    pub static ref NETWORK_INTERFACE: Mutex<Interface> = Mutex::new(Interface {
-        hw_addr: None,
-        ip_addr: None,
-        subnet_mask: None,
-        gateway_ip: None,
-        tx_buffer: [0u8; 1514],
-        rx_queue: VecDeque::new(),
-        tx_queue: VecDeque::new()
-    });
+    pub static ref NETWORK_INTERFACE: Mutex<Interface> = Mutex::new(Interface::new());
 }

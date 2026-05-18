@@ -1,11 +1,12 @@
 use core::arch::naked_asm;
-use core::sync::atomic::AtomicU64;
+use core::sync::atomic::{AtomicBool, AtomicU64};
 use lazy_static::lazy_static;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use crate::apic::apic::send_eoi;
+use crate::crypto::random::{EntropyPool, GLOBAL_ENTROPY};
 use crate::shell::shell::{PENDING_COMMAND, SHELL};
 use crate::task::task_manager::GLOBAL_TASK_MANAGER;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
@@ -14,6 +15,8 @@ use crate::vgadriver::writer::WRITER;
 pub const KEYBOARD_INTERRUPT_ID: u8 = 33;
 pub const TIMER_INTERRUPT_ID: u8 = 34;
 pub static TICKS: AtomicU64 = AtomicU64::new(0);
+pub static CTRL_C_PRESSED: AtomicBool = AtomicBool::new(false);
+static CTRL_HELD: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
@@ -80,6 +83,11 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
     let scancode: u8 = unsafe { port.read() };
 
     match scancode {
+        0x1D => CTRL_HELD.store(true, core::sync::atomic::Ordering::Relaxed),
+        0x9D => CTRL_HELD.store(false, core::sync::atomic::Ordering::Relaxed),
+        0x2E if CTRL_HELD.load(core::sync::atomic::Ordering::Relaxed) => {
+            CTRL_C_PRESSED.store(true, core::sync::atomic::Ordering::Relaxed);
+        }
         0x4B => {
             // right arrow
             SHELL.lock().move_index_left();
@@ -111,6 +119,13 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
                 }
             }
         }
+    }
+
+    let tsc = unsafe { core::arch::x86_64::_rdtsc() };
+
+    if let Some(mut pool) = GLOBAL_ENTROPY.try_lock() {
+        let noise = tsc ^ (scancode as u64);
+        pool.add_noise(noise);
     }
 
     unsafe {

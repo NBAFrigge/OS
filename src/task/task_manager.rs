@@ -1,11 +1,10 @@
-use core::future::Ready;
-
 use alloc::{boxed::Box, collections::vec_deque::VecDeque};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::{
     idt::interrupt::TICKS,
+    kinfo, kwarn,
     task::task::{self, Task},
 };
 
@@ -38,6 +37,10 @@ impl TaskManager {
         for _ in 0..self.task_list.len() {
             let mut next_task = self.task_list.pop_front().unwrap();
 
+            if next_task.state == task::State::Terminated {
+                continue;
+            }
+
             if next_task.state == task::State::Waiting
                 && next_task.wake_on_tick > 0
                 && next_task.wake_on_tick <= TICKS.load(core::sync::atomic::Ordering::Relaxed)
@@ -51,12 +54,14 @@ impl TaskManager {
 
                 if old_task.state == task::State::Running {
                     old_task.state = task::State::Ready;
+                    self.task_list.push_back(old_task);
+                } else if old_task.state != task::State::Terminated {
+                    self.task_list.push_back(old_task);
                 }
 
                 next_task.state = task::State::Running;
                 let new_ptr = next_task.saved_stack_pointer;
 
-                self.task_list.push_back(old_task);
                 self.current_task = Some(next_task);
                 return new_ptr;
             } else {
@@ -88,6 +93,36 @@ impl TaskManager {
             }
             None => self.current_task.as_ref().unwrap().saved_stack_pointer,
         }
+    }
+
+    pub fn list_tasks(&self) {
+        if let Some(task) = &self.current_task {
+            println!("ID: {} | State: {:?} (Current)", task.id, task.state);
+        }
+        for task in &self.task_list {
+            println!("ID: {} | State: {:?}", task.id, task.state);
+        }
+    }
+
+    pub fn kill_task(&mut self, id: u8) -> bool {
+        for task in self.task_list.iter_mut() {
+            if task.id == id {
+                task.state = task::State::Terminated;
+                kinfo!("task {} terminated", id);
+                return true;
+            }
+        }
+
+        if let Some(task) = self.current_task.as_mut() {
+            if task.id == id {
+                task.state = task::State::Terminated;
+                kinfo!("task {} terminated (was current)", id);
+                return true;
+            }
+        }
+
+        kwarn!("kill_task: task {} not found", id);
+        false
     }
 }
 

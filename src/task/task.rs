@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use core::arch::asm;
 use x86_64::structures::idt::InterruptStackFrame;
 
-use crate::idt::interrupt::TICKS;
+use crate::{idt::interrupt::TICKS, task::task_manager::GLOBAL_TASK_MANAGER};
 
 const STACK_CAPACITY: usize = 1024 * 16; // 16 kib
 
@@ -11,6 +11,7 @@ pub enum State {
     Ready,
     Running,
     Waiting,
+    Terminated,
 }
 
 pub struct Task {
@@ -97,6 +98,16 @@ pub fn sleep(ms: u64) {
         }
     });
 
+    yield_now();
+}
+
+pub fn exit_current_task() {
+    {
+        let mut manager = GLOBAL_TASK_MANAGER.lock();
+        if let Some(task) = manager.current_task.as_mut() {
+            task.state = State::Terminated;
+        }
+    }
     yield_now();
 }
 
