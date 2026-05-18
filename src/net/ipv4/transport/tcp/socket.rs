@@ -7,7 +7,7 @@ use spin::Mutex;
 
 use crate::{
     crypto::random::{generate_u16, generate_u32},
-    kdebug, ktrace, kwarn,
+    kdebug, kinfo, ktrace, kwarn,
     net::{
         interface::NETWORK_INTERFACE,
         ipv4::{
@@ -39,6 +39,13 @@ pub enum TcpState {
     TimeWait,
     CloseWait,
     LastAck,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TcpError {
+    NotReady,
+    WrongState,
+    BufferFull,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
@@ -107,6 +114,37 @@ impl TcpSocket {
     fn sent_unacked_len(&self) -> usize {
         self.local_seq.wrapping_sub(self.send_unacked) as usize
     }
+
+    pub fn close(&mut self) -> Result<(), TcpError> {
+        if self.state != TcpState::CloseWait {
+            return Err(TcpError::WrongState);
+        }
+
+        let src_ip = match NETWORK_INTERFACE.lock().ip_addr {
+            Some(ip) if ip != [0, 0, 0, 0] => ip,
+            _ => return Err(TcpError::NotReady),
+        };
+
+        let mut fin_header = TcpHeader::new(
+            self.tuple.local_port,
+            self.tuple.remote_port,
+            self.local_seq,
+            self.remote_seq,
+            flags::FIN | flags::ACK,
+        );
+
+        fin_header.calculate_checksum(&src_ip, &self.tuple.remote_ip, &[]);
+        let fin_bytes = fin_header.as_bytes();
+        ipv4::protocol::send(
+            self.tuple.remote_ip,
+            ipv4::transport::tcp::packet::PROTOCOL,
+            fin_bytes,
+        );
+
+        self.local_seq = self.local_seq.wrapping_add(1);
+        self.state = TcpState::LastAck;
+        Ok(())
+    }
 }
 
 fn send_segment(
@@ -155,6 +193,7 @@ pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
     local_port
 }
 
+// TODO: handle socket active closing
 pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
     if raw_packet.len() < 20 {
         ktrace!("TCP: packet too short");
@@ -238,10 +277,28 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                 }
             }
 
+            let mut invia_ack_dati = false;
             if !payload.is_empty() {
                 socket.rx_queue.extend(payload.iter().copied());
                 socket.remote_seq = socket.remote_seq.wrapping_add(payload.len() as u32);
+                invia_ack_dati = true;
+            }
 
+            if (header.flags & flags::FIN) != 0 {
+                socket.remote_seq = socket.remote_seq.wrapping_add(1);
+                socket.state = TcpState::CloseWait;
+                kdebug!("TCP: Received FIN from server. Moving to CloseWait.");
+
+                let mut ack_packet = TcpHeader::new(
+                    socket.tuple.local_port,
+                    socket.tuple.remote_port,
+                    socket.local_seq,
+                    socket.remote_seq,
+                    flags::ACK,
+                );
+                ack_packet.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
+                ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack_packet.as_bytes());
+            } else if invia_ack_dati {
                 let mut ack = tcp::packet::TcpHeader::new(
                     key.local_port,
                     key.remote_port,
@@ -251,6 +308,15 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                 );
                 ack.calculate_checksum(src_ip, &dst_ip, &[]);
                 ipv4::protocol::send(key.remote_ip, PROTOCOL, ack.as_bytes());
+            }
+        }
+
+        TcpState::LastAck => {
+            if (header.flags & flags::ACK) != 0 {
+                if ack_num == socket.local_seq {
+                    kdebug!("TCP: Received final ACK in LastAck. Connection closed cleanly.");
+                    socket.state = TcpState::Closed;
+                }
             }
         }
 
@@ -264,82 +330,106 @@ pub fn tcp_tick() {
         _ => return,
     };
 
-    let manager = TCP_SOCKET_MANAGER.lock();
-    for socket_handle in manager.values() {
-        let mut socket = socket_handle.lock();
+    let mut to_remove: alloc::vec::Vec<TcpTuple> = alloc::vec::Vec::new();
 
-        match socket.state {
-            TcpState::SynSent => {
-                socket.retransmit_ticks += 1;
-                if socket.retransmit_ticks >= SYN_RETRANSMIT_INTERVAL {
-                    socket.retransmit_ticks = 0;
-                    kdebug!(
-                        "TCP: retransmitting SYN to port {}",
-                        socket.tuple.remote_port
-                    );
-                    send_segment(
-                        &src_ip,
-                        socket.tuple.remote_ip,
-                        socket.tuple.local_port,
-                        socket.tuple.remote_port,
-                        socket.send_unacked,
-                        0,
-                        flags::SYN,
-                        &[],
-                    );
-                }
-            }
+    {
+        let manager = TCP_SOCKET_MANAGER.lock();
+        for (tuple, socket_handle) in manager.iter() {
+            let mut socket = socket_handle.lock();
 
-            TcpState::Established => {
-                let sent = socket.sent_unacked_len();
-                let unsent = socket.tx_queue.len().saturating_sub(sent);
-
-                if unsent > 0 {
-                    let to_send = unsent.min(MSS);
-                    let segment: alloc::vec::Vec<u8> = socket
-                        .tx_queue
-                        .iter()
-                        .skip(sent)
-                        .take(to_send)
-                        .copied()
-                        .collect();
-
-                    send_segment(
-                        &src_ip,
-                        socket.tuple.remote_ip,
-                        socket.tuple.local_port,
-                        socket.tuple.remote_port,
-                        socket.local_seq,
-                        socket.remote_seq,
-                        flags::ACK | flags::PSH,
-                        &segment,
-                    );
-                    socket.local_seq = socket.local_seq.wrapping_add(to_send as u32);
-                    socket.retransmit_ticks = 0;
-                } else if sent > 0 {
+            match socket.state {
+                TcpState::SynSent => {
                     socket.retransmit_ticks += 1;
-                    if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
+                    if socket.retransmit_ticks >= SYN_RETRANSMIT_INTERVAL {
                         socket.retransmit_ticks = 0;
-                        let to_send = sent.min(MSS);
-                        let segment: alloc::vec::Vec<u8> =
-                            socket.tx_queue.iter().take(to_send).copied().collect();
-
-                        kdebug!("TCP: retransmitting {} bytes", to_send);
+                        kdebug!(
+                            "TCP: retransmitting SYN to port {}",
+                            socket.tuple.remote_port
+                        );
                         send_segment(
                             &src_ip,
                             socket.tuple.remote_ip,
                             socket.tuple.local_port,
                             socket.tuple.remote_port,
                             socket.send_unacked,
+                            0,
+                            flags::SYN,
+                            &[],
+                        );
+                    }
+                }
+
+                TcpState::Established => {
+                    let sent = socket.sent_unacked_len();
+                    let unsent = socket.tx_queue.len().saturating_sub(sent);
+
+                    if unsent > 0 {
+                        let to_send = unsent.min(MSS);
+                        let segment: alloc::vec::Vec<u8> = socket
+                            .tx_queue
+                            .iter()
+                            .skip(sent)
+                            .take(to_send)
+                            .copied()
+                            .collect();
+
+                        send_segment(
+                            &src_ip,
+                            socket.tuple.remote_ip,
+                            socket.tuple.local_port,
+                            socket.tuple.remote_port,
+                            socket.local_seq,
                             socket.remote_seq,
                             flags::ACK | flags::PSH,
                             &segment,
                         );
+                        socket.local_seq = socket.local_seq.wrapping_add(to_send as u32);
+                        socket.retransmit_ticks = 0;
+                    } else if sent > 0 {
+                        socket.retransmit_ticks += 1;
+                        if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
+                            socket.retransmit_ticks = 0;
+                            let to_send = sent.min(MSS);
+                            let segment: alloc::vec::Vec<u8> =
+                                socket.tx_queue.iter().take(to_send).copied().collect();
+
+                            kdebug!("TCP: retransmitting {} bytes", to_send);
+                            send_segment(
+                                &src_ip,
+                                socket.tuple.remote_ip,
+                                socket.tuple.local_port,
+                                socket.tuple.remote_port,
+                                socket.send_unacked,
+                                socket.remote_seq,
+                                flags::ACK | flags::PSH,
+                                &segment,
+                            );
+                        }
                     }
                 }
+
+                _ => {}
             }
 
-            _ => {}
+            if socket.state == TcpState::Closed {
+                to_remove.push(*tuple);
+            }
+        }
+    }
+
+    if !to_remove.is_empty() {
+        let mut manager = TCP_SOCKET_MANAGER.lock();
+        for tuple in &to_remove {
+            manager.remove(tuple);
+            kinfo!(
+                "TCP: Socket removed {} -> {}.{}.{}.{}:{} from the manager",
+                tuple.local_port,
+                tuple.remote_ip[0],
+                tuple.remote_ip[1],
+                tuple.remote_ip[2],
+                tuple.remote_ip[3],
+                tuple.remote_port
+            );
         }
     }
 }

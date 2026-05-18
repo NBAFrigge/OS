@@ -6,7 +6,7 @@ use crate::{
     command_handler::commands::helpers::parse_ip,
     net::ipv4::transport::tcp::{
         self,
-        socket::{TcpTuple, TCP_SOCKET_MANAGER},
+        socket::{TcpState, TcpTuple, TCP_SOCKET_MANAGER},
     },
     shell::shell::{HandlerResult, SHELL},
 };
@@ -70,6 +70,17 @@ fn nc_on_tick() -> HandlerResult {
             if let Ok(text) = core::str::from_utf8(&buf[..n]) {
                 print!("{}", text);
             }
+        }
+
+        if socket.lock().state == TcpState::CloseWait {
+            let mut n = socket.lock().read(&mut buf);
+            while n > 0 {
+                if let Ok(text) = core::str::from_utf8(&buf[..n]) {
+                    print!("{}", text);
+                }
+                n = socket.lock().read(&mut buf);
+            }
+            socket.lock().close();
         }
     }
 
