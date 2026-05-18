@@ -23,20 +23,6 @@ pub mod flags {
     pub const URG: u8 = 1 << 5; // 0x20
 }
 
-pub enum TcpState {
-    Closed,
-    Listen,
-    SynSent,
-    SynReceived,
-    Established,
-    FinWait1,
-    FinWait2,
-    Closing,
-    TimeWait,
-    CloseWait,
-    LastAck,
-}
-
 impl TcpHeader {
     pub fn new(src_port: u16, dst_port: u16, seq: u32, ack: u32, tcp_flags: u8) -> Self {
         Self {
@@ -160,7 +146,6 @@ pub fn verify_segment_checksum(src_ip: &[u8; 4], dst_ip: &[u8; 4], tcp_segment: 
 }
 
 impl TcpHeader {
-
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(
