@@ -86,11 +86,13 @@ fn nc_on_input(data: &str) -> HandlerResult {
         local_port: c.local_port,
     };
     drop(c);
-    let paylaod = data.as_bytes();
+    let mut payload = Vec::with_capacity(data.len() + 1);
+    payload.extend_from_slice(data.as_bytes());
+    payload.push(b'\n');
 
     let manager = TCP_SOCKET_MANAGER.lock();
     if let Some(socket) = manager.get(&key) {
-        socket.lock().write(paylaod);
+        socket.lock().write(&payload);
     }
     HandlerResult::Continue
 }
