@@ -3,6 +3,7 @@ use lazy_static::lazy_static;
 use spin::mutex::Mutex;
 
 use crate::{
+    command_handler::commands::helpers::parse_ip,
     net::ipv4::transport::tcp::{
         self,
         socket::{TcpTuple, TCP_SOCKET_MANAGER},
@@ -95,18 +96,6 @@ fn nc_on_input(data: &str) -> HandlerResult {
         socket.lock().write(&payload);
     }
     HandlerResult::Continue
-}
-
-fn parse_ip(ip_str: &str) -> Option<[u8; 4]> {
-    let parts: Vec<&str> = ip_str.split('.').collect();
-    if parts.len() != 4 {
-        return None;
-    }
-    let mut ip = [0u8; 4];
-    for (i, part) in parts.iter().enumerate() {
-        ip[i] = part.parse::<u8>().ok()?;
-    }
-    Some(ip)
 }
 
 lazy_static! {

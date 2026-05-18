@@ -3,6 +3,7 @@ use core::sync::atomic::Ordering;
 use alloc::vec::Vec;
 
 use crate::{
+    command_handler::commands::helpers::parse_ip,
     idt::interrupt::TICKS,
     net::{
         arp,
@@ -92,16 +93,4 @@ fn resolve_target(target: &str) -> Option<[u8; 4]> {
         return Some(ip);
     }
     DnsResolver.get(target)
-}
-
-fn parse_ip(ip_str: &str) -> Option<[u8; 4]> {
-    let parts: Vec<&str> = ip_str.split('.').collect();
-    if parts.len() != 4 {
-        return None;
-    }
-    let mut ip = [0u8; 4];
-    for (i, part) in parts.iter().enumerate() {
-        ip[i] = part.parse::<u8>().ok()?;
-    }
-    Some(ip)
 }
