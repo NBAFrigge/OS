@@ -91,6 +91,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let shell = Task::new(1, shell_task as u64);
     let network_poll = Task::new(2, network_task_entry as u64);
     let dhcp = Task::new(3, dhcp_task as u64);
+    let tcp_test = Task::new(4, tcp_test_task as u64);
 
     x86_64::instructions::interrupts::without_interrupts(|| {
         let mut manager = crate::task::task_manager::GLOBAL_TASK_MANAGER.lock();
@@ -100,6 +101,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
             .task_list
             .push_back(alloc::boxed::Box::new(network_poll));
         manager.task_list.push_back(alloc::boxed::Box::new(dhcp));
+        manager
+            .task_list
+            .push_back(alloc::boxed::Box::new(tcp_test));
 
         if let Some(first) = manager.task_list.pop_front() {
             manager.current_task = Some(first);
@@ -144,4 +148,23 @@ fn panic(info: &PanicInfo) -> ! {
 
 lazy_static! {
     pub static ref MEMORY_OFFSET: Mutex<u64> = Mutex::new(0);
+}
+
+fn tcp_test_task() -> ! {
+    loop {
+        let ip = crate::net::interface::NETWORK_INTERFACE.lock().ip_addr;
+        if ip != Some([0, 0, 0, 0]) && ip.is_some() {
+            break;
+        }
+        x86_64::instructions::hlt();
+    }
+
+    let server_ip: [u8; 4] = [10, 0, 2, 2];
+    let server_port: u16 = 8080;
+
+    crate::net::ipv4::transport::tcp::socket::connect(&server_ip, server_port);
+
+    loop {
+        x86_64::instructions::hlt();
+    }
 }
