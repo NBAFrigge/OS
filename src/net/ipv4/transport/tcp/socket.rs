@@ -26,7 +26,7 @@ const SYN_RETRANSMIT_INTERVAL: u32 = 500;
 const DATA_RETRANSMIT_INTERVAL: u32 = 1000;
 const MSS: usize = 536;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum TcpState {
     Closed,
     Listen,
@@ -48,7 +48,7 @@ pub enum TcpError {
     BufferFull,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Debug)]
 pub struct TcpTuple {
     pub local_port: u16,
     pub remote_ip: [u8; 4],
@@ -369,6 +369,13 @@ pub fn tcp_tick() {
         for (tuple, socket_handle) in manager.iter() {
             let mut socket = socket_handle.lock();
 
+            let closing = socket.state == TcpState::FinWait1 || socket.state == TcpState::LastAck;
+            if socket.sent_unacked_len() > 0 || closing {
+                socket.retransmit_ticks += 1;
+            } else {
+                socket.retransmit_ticks = 0;
+            }
+
             match socket.state {
                 TcpState::SynSent => {
                     socket.retransmit_ticks += 1;
@@ -416,27 +423,45 @@ pub fn tcp_tick() {
                             &segment,
                         );
                         socket.local_seq = socket.local_seq.wrapping_add(to_send as u32);
-                        socket.retransmit_ticks = 0;
-                    } else if sent > 0 {
-                        socket.retransmit_ticks += 1;
-                        if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
-                            socket.retransmit_ticks = 0;
-                            let to_send = sent.min(MSS);
-                            let segment: alloc::vec::Vec<u8> =
-                                socket.tx_queue.iter().take(to_send).copied().collect();
+                    }
 
-                            kdebug!("TCP: retransmitting {} bytes", to_send);
-                            send_segment(
-                                &src_ip,
-                                socket.tuple.remote_ip,
-                                socket.tuple.local_port,
-                                socket.tuple.remote_port,
-                                socket.send_unacked,
-                                socket.remote_seq,
-                                flags::ACK | flags::PSH,
-                                &segment,
-                            );
-                        }
+                    if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
+                        socket.retransmit_ticks = 0;
+                        let to_send = sent.min(MSS);
+                        let segment: alloc::vec::Vec<u8> =
+                            socket.tx_queue.iter().take(to_send).copied().collect();
+
+                        kdebug!("TCP: retransmitting {} bytes", to_send);
+                        send_segment(
+                            &src_ip,
+                            socket.tuple.remote_ip,
+                            socket.tuple.local_port,
+                            socket.tuple.remote_port,
+                            socket.send_unacked,
+                            socket.remote_seq,
+                            flags::ACK | flags::PSH,
+                            &segment,
+                        );
+                    }
+                }
+
+                TcpState::FinWait1 | TcpState::LastAck => {
+                    if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
+                        socket.retransmit_ticks = 0;
+                        kdebug!("TCP: retransmitting FIN in state {:?}", socket.state);
+
+                        let fin_seq = socket.local_seq.wrapping_sub(1);
+
+                        send_segment(
+                            &src_ip,
+                            socket.tuple.remote_ip,
+                            socket.tuple.local_port,
+                            socket.tuple.remote_port,
+                            fin_seq,
+                            socket.remote_seq,
+                            flags::FIN | flags::ACK,
+                            &[],
+                        );
                     }
                 }
 
@@ -465,7 +490,6 @@ pub fn tcp_tick() {
         }
     }
 }
-
 pub type SocketHandle = Arc<Mutex<TcpSocket>>;
 
 lazy_static! {
