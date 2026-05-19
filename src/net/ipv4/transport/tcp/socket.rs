@@ -65,6 +65,8 @@ pub struct TcpSocket {
     pub tx_queue: VecDeque<u8>,
     pub retransmit_ticks: u32,
     pub max_queue_size: usize,
+    pub cwnd: u32,
+    pub ssthresh: u32,
 }
 
 impl TcpSocket {
@@ -84,6 +86,8 @@ impl TcpSocket {
             tx_queue: VecDeque::new(),
             retransmit_ticks: 0,
             max_queue_size: 65536,
+            cwnd: MSS as u32,
+            ssthresh: u32::MAX,
         }
     }
 
@@ -275,8 +279,14 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                     for _ in 0..bytes_acked {
                         socket.tx_queue.pop_front();
                     }
+                    if socket.cwnd < socket.ssthresh {
+                        socket.cwnd += MSS as u32;
+                    } else {
+                        socket.cwnd = socket.cwnd + (MSS * MSS) as u32 / socket.cwnd
+                    }
                     socket.send_unacked = ack_num;
                     socket.retransmit_ticks = 0;
+                    socket.cwnd = socket.cwnd.min(socket.max_queue_size as u32);
                 }
             }
 
@@ -402,36 +412,30 @@ pub fn tcp_tick() {
                     let sent = socket.sent_unacked_len();
                     let unsent = socket.tx_queue.len().saturating_sub(sent);
 
-                    if unsent > 0 {
-                        let to_send = unsent.min(MSS);
+                    if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
+                        socket.retransmit_ticks = 0;
+
+                        socket.ssthresh = (sent / 2).max(2 * MSS) as u32;
+                        socket.cwnd = MSS as u32;
+
+                        kdebug!(
+                            "TCP: Timeout, ssthresh: {}, cwnd reset: {}",
+                            socket.ssthresh,
+                            socket.cwnd
+                        );
+
+                        let to_send_retransmit = sent.min(MSS);
                         let segment: alloc::vec::Vec<u8> = socket
                             .tx_queue
                             .iter()
-                            .skip(sent)
-                            .take(to_send)
+                            .take(to_send_retransmit)
                             .copied()
                             .collect();
 
-                        send_segment(
-                            &src_ip,
-                            socket.tuple.remote_ip,
-                            socket.tuple.local_port,
-                            socket.tuple.remote_port,
-                            socket.local_seq,
-                            socket.remote_seq,
-                            flags::ACK | flags::PSH,
-                            &segment,
+                        kdebug!(
+                            "TCP: retransmitting {} bytes due to timeout",
+                            to_send_retransmit
                         );
-                        socket.local_seq = socket.local_seq.wrapping_add(to_send as u32);
-                    }
-
-                    if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
-                        socket.retransmit_ticks = 0;
-                        let to_send = sent.min(MSS);
-                        let segment: alloc::vec::Vec<u8> =
-                            socket.tx_queue.iter().take(to_send).copied().collect();
-
-                        kdebug!("TCP: retransmitting {} bytes", to_send);
                         send_segment(
                             &src_ip,
                             socket.tuple.remote_ip,
@@ -442,6 +446,37 @@ pub fn tcp_tick() {
                             flags::ACK | flags::PSH,
                             &segment,
                         );
+                    } else {
+                        if sent >= socket.cwnd as usize {
+                            continue;
+                        }
+
+                        let cwnd_usize = socket.cwnd as usize;
+                        let free_window_space = cwnd_usize.saturating_sub(sent);
+                        let to_send_new = unsent.min(MSS).min(free_window_space);
+
+                        if to_send_new > 0 {
+                            let segment: alloc::vec::Vec<u8> = socket
+                                .tx_queue
+                                .iter()
+                                .skip(sent)
+                                .take(to_send_new)
+                                .copied()
+                                .collect();
+
+                            send_segment(
+                                &src_ip,
+                                socket.tuple.remote_ip,
+                                socket.tuple.local_port,
+                                socket.tuple.remote_port,
+                                socket.local_seq,
+                                socket.remote_seq,
+                                flags::ACK | flags::PSH,
+                                &segment,
+                            );
+
+                            socket.local_seq = socket.local_seq.wrapping_add(to_send_new as u32);
+                        }
                     }
                 }
 
