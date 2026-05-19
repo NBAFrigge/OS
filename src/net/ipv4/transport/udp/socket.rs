@@ -8,7 +8,7 @@ use spin::Mutex;
 use crate::net::interface::NETWORK_INTERFACE;
 use crate::net::ipv4;
 use crate::net::ipv4::transport::udp::packet::{UdpHeader, UdpPacketData};
-use crate::{kdebug, kwarn};
+use crate::{kdebug, ktrace, kwarn};
 
 const PROTOCOL: u8 = 17;
 
@@ -67,6 +67,10 @@ pub fn create_socket(port: u16) -> Arc<Mutex<UdpSocket>> {
 }
 
 pub fn handle_udp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
+    if raw_packet.len() < 8 {
+        ktrace!("Udp packet too short");
+        return;
+    }
     let header_bytes = &raw_packet[0..8];
     let header = UdpHeader::from_bytes(header_bytes);
     let payload_len = (header.length as usize)

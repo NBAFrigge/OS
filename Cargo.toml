@@ -26,5 +26,7 @@ run-args = [
   "user,id=net0,hostfwd=udp::1234-:1234,hostfwd=udp::5000-:5000",
   "-device",
   "e1000,netdev=net0,mac=52:54:00:12:34:56",
+  "-object",
+  "filter-dump,id=dump0,netdev=net0,file=/tmp/os_net.pcap",
 ]
 test-success-exit-code = 33

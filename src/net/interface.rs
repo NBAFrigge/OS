@@ -2,7 +2,10 @@ use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::net::{arp::arp_struct::ArpPacket, ipv4::ipv4_struct::ip_Header};
+use crate::{
+    kerror,
+    net::{arp::arp_struct::ArpPacket, ipv4::ipv4_struct::ip_Header},
+};
 
 pub struct Interface {
     pub hw_addr: Option<[u8; 6]>,
@@ -64,6 +67,10 @@ impl Interface {
         self.tx_buffer[12..14].copy_from_slice(&ether_type);
 
         let payload_len = payload.len();
+        if payload_len > 1514 {
+            kerror!("Ethernet packet payload too long: {} bytes", payload_len);
+            return;
+        }
         self.tx_buffer[14..14 + payload_len].copy_from_slice(payload);
 
         let mut total_size = 14 + payload_len;

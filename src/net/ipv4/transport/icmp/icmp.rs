@@ -1,5 +1,5 @@
-use crate::{net::ipv4::protocol::send, vgadriver::writer::WRITER};
 use crate::{kdebug, kwarn};
+use crate::{net::ipv4::protocol::send, vgadriver::writer::WRITER};
 use alloc::vec::Vec;
 use core::ptr::read_unaligned;
 use lazy_static::lazy_static;
@@ -92,14 +92,22 @@ pub fn handle_icmp_packet(src_ip: [u8; 4], payload: &[u8]) {
             ICMP_TYPE_ECHO_REPLY => {
                 kdebug!(
                     "ICMP: echo reply from {}.{}.{}.{} seq={}",
-                    src_ip[0], src_ip[1], src_ip[2], src_ip[3], seq
+                    src_ip[0],
+                    src_ip[1],
+                    src_ip[2],
+                    src_ip[3],
+                    seq
                 );
                 *PING_REPLY.lock() = Some((src_ip, seq));
             }
             ICMP_TYPE_ECHO_REQUEST => {
                 kdebug!(
                     "ICMP: echo request from {}.{}.{}.{} seq={}",
-                    src_ip[0], src_ip[1], src_ip[2], src_ip[3], seq
+                    src_ip[0],
+                    src_ip[1],
+                    src_ip[2],
+                    src_ip[3],
+                    seq
                 );
                 print!("\n");
                 println!("ICMP: Echo Request receveid from {:?}", src_ip);
@@ -121,8 +129,8 @@ pub fn reply_to_ping(target_ip: [u8; 4], request: IcmpPacket, data: &[u8]) {
         typ: ICMP_TYPE_ECHO_REPLY,
         code: 0,
         checksum: 0,
-        id: request.id,
-        sequence: request.sequence,
+        id: request.id.to_be(),
+        sequence: request.sequence.to_be(),
     };
 
     let mut full_payload = Vec::with_capacity(8 + data.len());

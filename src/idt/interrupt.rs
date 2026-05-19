@@ -6,6 +6,7 @@ use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 
 use crate::apic::apic::send_eoi;
+use crate::crypto::random::{EntropyPool, GLOBAL_ENTROPY};
 use crate::shell::shell::{PENDING_COMMAND, SHELL};
 use crate::task::task_manager::GLOBAL_TASK_MANAGER;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
@@ -118,6 +119,13 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
                 }
             }
         }
+    }
+
+    let tsc = unsafe { core::arch::x86_64::_rdtsc() };
+
+    if let Some(mut pool) = GLOBAL_ENTROPY.try_lock() {
+        let noise = tsc ^ (scancode as u64);
+        pool.add_noise(noise);
     }
 
     unsafe {
