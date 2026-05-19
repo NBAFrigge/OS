@@ -1,9 +1,11 @@
 pub mod arp_test;
+pub mod helpers;
 pub mod clear;
 pub mod echo;
 pub mod help;
 pub mod loglevel;
 pub mod lspci;
+pub mod netcat;
 pub mod paging;
 pub mod ping;
 pub mod pkill;
