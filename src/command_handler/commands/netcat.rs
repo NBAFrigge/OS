@@ -6,7 +6,7 @@ use crate::{
     command_handler::commands::helpers::parse_ip,
     net::ipv4::transport::tcp::{
         self,
-        socket::{TcpState, TcpTuple, TCP_SOCKET_MANAGER},
+        socket::{self, TcpState, TcpTuple, TCP_SOCKET_MANAGER},
     },
     shell::shell::{HandlerResult, SHELL},
 };
@@ -50,6 +50,7 @@ pub fn cmd_netcat(args: &str) {
     let mut shell = SHELL.lock();
     shell.on_tick = Some(nc_on_tick);
     shell.on_input = Some(nc_on_input);
+    shell.on_close = Some(nc_on_close);
     drop(shell);
 }
 
@@ -107,6 +108,22 @@ fn nc_on_input(data: &str) -> HandlerResult {
         socket.lock().write(&payload);
     }
     HandlerResult::Continue
+}
+
+fn nc_on_close() -> HandlerResult {
+    let c = CONTEXT.lock();
+    let key = TcpTuple {
+        remote_ip: c.remote_ip,
+        remote_port: c.remote_port,
+        local_port: c.local_port,
+    };
+    drop(c);
+
+    let manager = TCP_SOCKET_MANAGER.lock();
+    if let Some(socket) = manager.get(&key) {
+        socket.lock().close();
+    }
+    return HandlerResult::Done;
 }
 
 lazy_static! {

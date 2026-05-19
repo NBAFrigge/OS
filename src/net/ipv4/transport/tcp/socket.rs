@@ -116,9 +116,11 @@ impl TcpSocket {
     }
 
     pub fn close(&mut self) -> Result<(), TcpError> {
-        if self.state != TcpState::CloseWait {
-            return Err(TcpError::WrongState);
-        }
+        let next_state = match self.state {
+            TcpState::Established => TcpState::FinWait1,
+            TcpState::CloseWait => TcpState::LastAck,
+            _ => return Err(TcpError::WrongState),
+        };
 
         let src_ip = match NETWORK_INTERFACE.lock().ip_addr {
             Some(ip) if ip != [0, 0, 0, 0] => ip,
@@ -135,6 +137,7 @@ impl TcpSocket {
 
         fin_header.calculate_checksum(&src_ip, &self.tuple.remote_ip, &[]);
         let fin_bytes = fin_header.as_bytes();
+
         ipv4::protocol::send(
             self.tuple.remote_ip,
             ipv4::transport::tcp::packet::PROTOCOL,
@@ -142,7 +145,8 @@ impl TcpSocket {
         );
 
         self.local_seq = self.local_seq.wrapping_add(1);
-        self.state = TcpState::LastAck;
+        self.state = next_state;
+
         Ok(())
     }
 }
@@ -193,7 +197,6 @@ pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
     local_port
 }
 
-// TODO: handle socket active closing
 pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
     if raw_packet.len() < 20 {
         ktrace!("TCP: packet too short");
@@ -311,12 +314,41 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
             }
         }
 
+        TcpState::FinWait1 => {
+            if (header.flags & flags::ACK) != 0 && ack_num == socket.local_seq {
+                socket.state = TcpState::FinWait2;
+            }
+        }
+
+        TcpState::FinWait2 => {
+            if (header.flags & flags::FIN) != 0 {
+                socket.remote_seq = socket.remote_seq.wrapping_add(1);
+
+                let mut ack = TcpHeader::new(
+                    dst_port,
+                    src_port,
+                    socket.local_seq,
+                    socket.remote_seq,
+                    flags::ACK,
+                );
+                ack.calculate_checksum(&dst_ip, src_ip, &[]);
+                ipv4::protocol::send(*src_ip, PROTOCOL, ack.as_bytes());
+
+                socket.state = TcpState::Closed;
+            }
+        }
+
         TcpState::LastAck => {
-            if (header.flags & flags::ACK) != 0 {
-                if ack_num == socket.local_seq {
-                    kdebug!("TCP: Received final ACK in LastAck. Connection closed cleanly.");
-                    socket.state = TcpState::Closed;
+            let bytes_acked = ack_num.wrapping_sub(socket.send_unacked) as usize;
+            if (header.flags & flags::ACK) != 0
+                && bytes_acked > 0
+                && bytes_acked <= socket.sent_unacked_len()
+            {
+                for _ in 0..bytes_acked {
+                    socket.tx_queue.pop_front();
                 }
+                socket.send_unacked = ack_num;
+                socket.retransmit_ticks = 0;
             }
         }
 
