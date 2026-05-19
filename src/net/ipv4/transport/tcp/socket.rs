@@ -12,10 +12,7 @@ use crate::{
         interface::NETWORK_INTERFACE,
         ipv4::{
             self,
-            transport::tcp::{
-                self,
-                packet::{self, verify_segment_checksum, TcpHeader, PROTOCOL},
-            },
+            transport::tcp::packet::{self, verify_segment_checksum, TcpHeader, PROTOCOL},
         },
     },
 };
@@ -255,10 +252,15 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
             socket.send_unacked = ack_num;
             socket.local_seq = ack_num;
 
-            let mut ack =
-                TcpHeader::new(dst_port, src_port, ack_num, socket.remote_seq, flags::ACK);
-            ack.calculate_checksum(&dst_ip, src_ip, &[]);
-            ipv4::protocol::send(*src_ip, PROTOCOL, ack.as_bytes());
+            let mut ack = TcpHeader::new(
+                socket.tuple.local_port,
+                socket.tuple.remote_port,
+                ack_num,
+                socket.remote_seq,
+                flags::ACK,
+            );
+            ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
+            ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
 
             kdebug!(
                 "TCP: connection established port {} ← {}.{}.{}.{}:{}",
@@ -312,15 +314,15 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                 ack_packet.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
                 ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack_packet.as_bytes());
             } else if invia_ack_dati {
-                let mut ack = tcp::packet::TcpHeader::new(
-                    key.local_port,
-                    key.remote_port,
+                let mut ack = TcpHeader::new(
+                    socket.tuple.local_port,
+                    socket.tuple.remote_port,
                     socket.local_seq,
                     socket.remote_seq,
                     flags::ACK,
                 );
-                ack.calculate_checksum(src_ip, &dst_ip, &[]);
-                ipv4::protocol::send(key.remote_ip, PROTOCOL, ack.as_bytes());
+                ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
+                ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
             }
         }
 
@@ -335,14 +337,14 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                 socket.remote_seq = socket.remote_seq.wrapping_add(1);
 
                 let mut ack = TcpHeader::new(
-                    dst_port,
-                    src_port,
+                    socket.tuple.local_port,
+                    socket.tuple.remote_port,
                     socket.local_seq,
                     socket.remote_seq,
                     flags::ACK,
                 );
-                ack.calculate_checksum(&dst_ip, src_ip, &[]);
-                ipv4::protocol::send(*src_ip, PROTOCOL, ack.as_bytes());
+                ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
+                ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
 
                 socket.state = TcpState::Closed;
             }
