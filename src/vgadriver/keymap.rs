@@ -112,9 +112,9 @@ impl Keymap {
     fn shift_convert(&self, scancode: u8) -> char {
         match scancode {
             0..=127 => {
-                let simbolo_special = KEYMAP_SHIFT_SYMBOLS[scancode as usize];
-                if simbolo_special != '\0' {
-                    simbolo_special
+                let special_char = KEYMAP_SHIFT_SYMBOLS[scancode as usize];
+                if special_char != '\0' {
+                    special_char
                 } else {
                     KEYMAP[scancode as usize].to_ascii_uppercase()
                 }

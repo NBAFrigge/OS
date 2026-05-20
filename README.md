@@ -4,7 +4,7 @@ Simple OS
 
 # Setup and run
 
-### 1. Toolchain Setup
+### 1. toolchain setup
 
 To compile for bare metal, you need the Rust source code and the LLVM tools for cross-compilation.
 
@@ -37,6 +37,6 @@ cargo bootimage
 To run the OS use the following command:
 
 ```bash
-qemu-system-x86_64 -drive format=raw,file=target/os/debug/bootimage-OS.bin -serial stdio
+qemu-system-x86_64 -drive format=raw,file=target/os/debug/bootimage-OS.bin -serial stdio -netdev user,id=net0 -device e1000,netdev=net0
 
 ```
