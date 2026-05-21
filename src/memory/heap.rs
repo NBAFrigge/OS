@@ -1,4 +1,3 @@
-use linked_list_allocator::LockedHeap;
 use x86_64::{
     structures::paging::{
         mapper::MapToError, FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
@@ -6,14 +5,11 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::memory::frame_allocator::BootInfoFrameAllocator;
+use crate::memory::{buddy_allocator::ALLOCATOR, frame_allocator::BootInfoFrameAllocator};
 
 const HEAP_START: u64 = 0x_4444_4444_0000;
 const SIZE: usize = 1024 * 1024; // 1 MiB
 const HEAP_END: u64 = HEAP_START + SIZE as u64 - 1;
-
-#[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 pub fn init(
     offset_page_table: &mut OffsetPageTable<'_>,
@@ -36,9 +32,7 @@ pub fn init(
         }
     }
 
-    unsafe {
-        ALLOCATOR.lock().init(HEAP_START as *mut u8, SIZE);
-    }
+    ALLOCATOR.lock().init(HEAP_START, HEAP_END);
 
     Ok(())
 }
