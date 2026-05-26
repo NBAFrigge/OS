@@ -1,6 +1,6 @@
 use core::arch::x86_64::CpuidResult;
 
-use crate::memory::buddy_allocator::PAGE_SIZE;
+use crate::memory::buddy_allocator::{ALLOCATOR, PAGE_SIZE};
 
 const MAX_ORDERS: usize = 10;
 
@@ -11,6 +11,19 @@ pub struct Slab {
     pub next: *mut Slab,
     pub prev: *mut Slab,
 }
+
+impl Slab {
+    pub fn new(start_addr: *mut u8) -> Self {
+        Self {
+            start_addr,
+            num_allocated_objects: 0,
+            first_free_slot: (start_addr as usize + size_of::<Slab>()) as *mut u8,
+            next: core::ptr::null_mut(),
+            prev: core::ptr::null_mut(),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct SlabCache {
     pub object_size: usize,
@@ -75,6 +88,13 @@ impl SlabManager {
                 cache.slabs_full = slab;
             }
             return pointer;
+        }
+
+        if cache.slabs_empty.is_null() {
+            let start_addr = ALLOCATOR.lock().alloc(PAGE_SIZE as u64);
+            let new_slab = Slab::new(start_addr);
+            core::ptr::write(start_addr as *mut Slab, new_slab);
+            cache.slabs_empty = start_addr as *mut Slab;
         }
 
         if !cache.slabs_empty.is_null() {
