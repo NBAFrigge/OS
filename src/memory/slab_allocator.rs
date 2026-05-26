@@ -95,6 +95,16 @@ impl SlabManager {
             let new_slab = Slab::new(start_addr);
             core::ptr::write(start_addr as *mut Slab, new_slab);
             cache.slabs_empty = start_addr as *mut Slab;
+            for i in 0..cache.num_objects_per_slab - 2 {
+                *((start_addr as usize + size_of::<Slab>() + cache.object_size * i)
+                    as *mut *mut u8) =
+                    (start_addr as usize + size_of::<Slab>() + cache.object_size * (i + 1))
+                        as *mut u8;
+            }
+            *((start_addr as usize
+                + size_of::<Slab>()
+                + cache.object_size * (cache.num_objects_per_slab - 1))
+                as *mut *mut u8) = core::ptr::null_mut();
         }
 
         if !cache.slabs_empty.is_null() {
