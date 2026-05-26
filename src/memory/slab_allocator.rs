@@ -98,4 +98,68 @@ impl SlabManager {
 
         core::ptr::null_mut()
     }
+
+    pub unsafe fn dealloc(&mut self, mut ptr: *mut u8, size: u64) {
+        let mut order = 0;
+        while 1 << order < size {
+            order += 1;
+        }
+
+        let cache = &mut self.slab_list[order];
+        let slab = (ptr as usize & !(PAGE_SIZE - 1)) as *mut Slab;
+        (*slab).num_allocated_objects -= 1;
+
+        *(ptr as *mut *mut u8) = (*slab).first_free_slot;
+        (*slab).first_free_slot = ptr;
+
+        let next = (*slab).next;
+        let prev = (*slab).prev;
+
+        if !(*slab).next.is_null() {
+            (*(*slab).next).prev = prev;
+            (*slab).next = core::ptr::null_mut();
+        }
+        if !(*slab).prev.is_null() {
+            (*(*slab).prev).next = next;
+            (*slab).prev = core::ptr::null_mut();
+        }
+
+        if (*slab).num_allocated_objects == cache.num_objects_per_slab - 1 {
+            if cache.slabs_full == slab {
+                cache.slabs_full = next;
+            }
+
+            if cache.slabs_partial.is_null() {
+                cache.slabs_partial = slab;
+                return;
+            }
+
+            (*slab).next = cache.slabs_partial;
+            (*cache.slabs_partial).prev = slab;
+            cache.slabs_partial = slab;
+        } else if (*slab).num_allocated_objects > 0 {
+            if cache.slabs_partial == slab {
+                cache.slabs_partial = next;
+            }
+            if cache.slabs_partial.is_null() {
+                cache.slabs_partial = slab;
+                return;
+            }
+            (*slab).next = cache.slabs_partial;
+            (*cache.slabs_partial).prev = slab;
+            cache.slabs_partial = slab;
+        } else {
+            if cache.slabs_partial == slab {
+                cache.slabs_partial = next;
+            }
+
+            if cache.slabs_empty.is_null() {
+                cache.slabs_empty = slab;
+                return;
+            }
+            (*slab).next = cache.slabs_empty;
+            (*cache.slabs_empty).prev = slab;
+            cache.slabs_empty = slab;
+        }
+    }
 }
