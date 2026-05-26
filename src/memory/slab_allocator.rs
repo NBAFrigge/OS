@@ -1,8 +1,10 @@
-use core::arch::x86_64::CpuidResult;
+use core::alloc::{GlobalAlloc, Layout};
 
-use crate::memory::buddy_allocator::{ALLOCATOR, PAGE_SIZE};
+use spin::mutex::Mutex;
 
-const MAX_ORDERS: usize = 10;
+use crate::memory::buddy_allocator::{BUDDYALLOCATOR, PAGE_SIZE};
+
+pub const MAX_ORDERS: usize = 10;
 
 pub struct Slab {
     pub start_addr: *mut u8,
@@ -34,7 +36,7 @@ pub struct SlabCache {
 }
 
 impl SlabCache {
-    fn default() -> Self {
+    const fn default() -> Self {
         SlabCache {
             object_size: 0,
             num_objects_per_slab: 0,
@@ -50,16 +52,24 @@ pub struct SlabManager {
 }
 
 impl SlabManager {
-    pub fn new() -> Self {
-        let mut slab_manager = SlabManager {
+    pub const fn new() -> Self {
+        Self {
             slab_list: [SlabCache::default(); MAX_ORDERS],
-        };
+        }
+    }
+
+    pub fn init(&mut self) {
         let free_space = PAGE_SIZE - size_of::<Slab>();
         for order in 0..MAX_ORDERS {
-            slab_manager.slab_list[order].object_size = 1 << order;
-            slab_manager.slab_list[order].num_objects_per_slab = free_space / (1 << order);
+            self.slab_list[order].object_size = if 1 << order >= size_of::<*mut u8>() {
+                1 << order
+            } else {
+                size_of::<*mut u8>()
+            };
+
+            self.slab_list[order].num_objects_per_slab =
+                free_space / (self.slab_list[order].object_size);
         }
-        slab_manager
     }
 
     pub unsafe fn alloc(&mut self, size: u64) -> *mut u8 {
@@ -91,11 +101,11 @@ impl SlabManager {
         }
 
         if cache.slabs_empty.is_null() {
-            let start_addr = ALLOCATOR.lock().alloc(PAGE_SIZE as u64);
+            let start_addr = BUDDYALLOCATOR.lock().alloc(PAGE_SIZE as u64);
             let new_slab = Slab::new(start_addr);
             core::ptr::write(start_addr as *mut Slab, new_slab);
             cache.slabs_empty = start_addr as *mut Slab;
-            for i in 0..cache.num_objects_per_slab - 2 {
+            for i in 0..cache.num_objects_per_slab - 1 {
                 *((start_addr as usize + size_of::<Slab>() + cache.object_size * i)
                     as *mut *mut u8) =
                     (start_addr as usize + size_of::<Slab>() + cache.object_size * (i + 1))
@@ -129,7 +139,7 @@ impl SlabManager {
         core::ptr::null_mut()
     }
 
-    pub unsafe fn dealloc(&mut self, mut ptr: *mut u8, size: u64) {
+    pub unsafe fn dealloc(&mut self, ptr: *mut u8, size: u64) {
         let mut order = 0;
         while 1 << order < size {
             order += 1;
@@ -193,3 +203,29 @@ impl SlabManager {
         }
     }
 }
+
+unsafe impl Send for SlabManager {}
+
+pub struct LockedSblab(Mutex<SlabManager>);
+
+impl LockedSblab {
+    pub const fn new() -> Self {
+        LockedSblab(Mutex::new(SlabManager::new()))
+    }
+
+    pub fn lock(&self) -> spin::MutexGuard<SlabManager> {
+        self.0.lock()
+    }
+}
+
+unsafe impl GlobalAlloc for LockedSblab {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        self.0.lock().alloc(layout.size() as u64)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.0.lock().dealloc(ptr, layout.size() as u64)
+    }
+}
+
+pub static SLABALLOCATOR: LockedSblab = LockedSblab::new();

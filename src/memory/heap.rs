@@ -5,7 +5,10 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::memory::{buddy_allocator::ALLOCATOR, frame_allocator::BootInfoFrameAllocator};
+use crate::memory::{
+    buddy_allocator::BUDDYALLOCATOR, frame_allocator::BootInfoFrameAllocator,
+    slab_allocator::SLABALLOCATOR,
+};
 
 const HEAP_START: u64 = 0x_4444_4444_0000;
 const SIZE: usize = 1024 * 1024; // 1 MiB
@@ -32,7 +35,8 @@ pub fn init(
         }
     }
 
-    ALLOCATOR.lock().init(HEAP_START, HEAP_END);
+    BUDDYALLOCATOR.lock().init(HEAP_START, HEAP_END);
+    SLABALLOCATOR.lock().init();
 
     Ok(())
 }

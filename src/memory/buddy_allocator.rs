@@ -168,5 +168,4 @@ unsafe impl GlobalAlloc for LockedBuddy {
     }
 }
 
-#[global_allocator]
-pub static ALLOCATOR: LockedBuddy = LockedBuddy::new();
+pub static BUDDYALLOCATOR: LockedBuddy = LockedBuddy::new();
