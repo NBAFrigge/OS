@@ -1,3 +1,3 @@
 mod constants;
-mod http;
+pub mod http;
 pub mod url_parser;
