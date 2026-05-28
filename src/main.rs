@@ -72,7 +72,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
 
     net::ipv4::http::url_parser::run_tests();
-    net::ipv4::http::http::run_tests();
+    net::ipv4::http::request::run_tests();
+    net::ipv4::http::response::run_tests();
     command_handler::command_handler::init_commands();
 
     let e1000 = E1000::init().unwrap_or_else(|err| {
