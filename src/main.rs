@@ -13,6 +13,8 @@ mod vgadriver;
 mod serial;
 #[macro_use]
 mod logger;
+#[macro_use]
+mod test_utils;
 mod crypto;
 mod net;
 
@@ -69,6 +71,7 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         memory::memory::init(&boot_info.memory_map, boot_info.physical_memory_offset);
     }
 
+    net::ipv4::http::url_parser::run_tests();
     command_handler::command_handler::init_commands();
 
     let e1000 = E1000::init().unwrap_or_else(|err| {
