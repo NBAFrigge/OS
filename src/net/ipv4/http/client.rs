@@ -2,7 +2,16 @@ use alloc::{str, vec::Vec};
 
 use crate::{
     kerror,
-    net::ipv4::transport::{tcp::socket, udp::dns::solver::DnsResolver},
+    net::ipv4::{
+        http::{
+            request::request,
+            response::{parse_response, response},
+        },
+        transport::{
+            tcp::socket::{self, TcpTuple, TCP_SOCKET_MANAGER},
+            udp::dns::solver::DnsResolver,
+        },
+    },
 };
 
 pub struct connection<'a> {
@@ -30,6 +39,49 @@ impl<'a> connection<'a> {
             return Err("connection error");
         }
         Ok(())
+    }
+
+    //TODO: add timeout
+    pub fn send(&self, request: request) -> Option<response> {
+        let manager = TCP_SOCKET_MANAGER.lock();
+        let socket = manager.get(&TcpTuple {
+            remote_ip: self.remote_ip,
+            remote_port: self.remote_port,
+            local_port: self.local_port,
+        })?;
+
+        let raw_request = request.build()?;
+
+        socket.lock().write(&raw_request);
+
+        let mut raw_response = [0u8; 65536];
+        let mut offset = 0;
+        while raw_response[..offset]
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            == None
+        {
+            offset += socket.lock().read(&mut raw_response[offset..]);
+        }
+
+        let header_lenght = raw_response[..offset]
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")?
+            + 4;
+        let header_string = core::str::from_utf8(&raw_request[..header_lenght]).ok()?;
+        let mut content_lenght = 0;
+        for s in header_string.split("\r\n") {
+            if s.contains("Content-Length") {
+                let splitted = s.split_once(":")?;
+                content_lenght = splitted.1.parse::<usize>().ok()?;
+            }
+        }
+
+        while offset < content_lenght + header_lenght {
+            offset += socket.lock().read(&mut raw_response[offset..]);
+        }
+
+        parse_response(&raw_response)
     }
 }
 

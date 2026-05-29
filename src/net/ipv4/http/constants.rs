@@ -1,3 +1,4 @@
+#[derive(Copy, Clone)]
 pub enum METHOD {
     GET,
     POST,
@@ -9,7 +10,7 @@ pub enum METHOD {
 }
 
 impl METHOD {
-    pub fn to_string(self) -> &'static str {
+    pub fn to_string(&self) -> &'static str {
         match self {
             METHOD::GET => "GET",
             METHOD::POST => "POST",

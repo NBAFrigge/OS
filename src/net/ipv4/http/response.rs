@@ -1,25 +1,26 @@
-use core::u16;
-
 use crate::{kdebug, kinfo, net::ipv4::http::constants::SP};
-use alloc::vec::{self, Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::{self, Vec},
+};
 
-pub struct response_parsed<'a> {
+pub struct response {
     pub status_code: u16,
-    pub headers: Vec<(&'a str, &'a str)>,
-    pub body: &'a [u8],
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
 }
 
-pub fn parse_response(raw: &[u8]) -> Option<response_parsed> {
+pub fn parse_response(raw: &[u8]) -> Option<response> {
     let mut parts = raw.splitn(3, |&b| b == b' ');
     let _version = parts.next()?;
     let status = parts.next()?;
     let remaining = parts.next()?;
     let status_code = core::str::from_utf8(status).ok()?.parse::<u16>().ok()?;
 
-    let mut resp = response_parsed {
+    let mut resp = response {
         status_code,
         headers: Vec::new(),
-        body: &[],
+        body: Vec::new(),
     };
 
     let headers_body_str = core::str::from_utf8(remaining).ok()?;
@@ -37,11 +38,12 @@ pub fn parse_response(raw: &[u8]) -> Option<response_parsed> {
 
         if s.contains(":") && !headers_finished {
             let splitted = s.split_once(": ")?;
-            resp.headers.push(splitted);
+            resp.headers
+                .push((splitted.0.to_string(), splitted.1.to_string()));
             continue;
         }
 
-        resp.body = s.as_bytes();
+        resp.body = s.as_bytes().to_vec();
     }
 
     Some(resp)
@@ -60,7 +62,7 @@ pub fn run_tests() {
             "200 OK - Content-Type header",
             r.headers
                 .iter()
-                .any(|&(k, v)| k == "Content-Type" && v == "text/plain"),
+                .any(|(k, v)| k == "Content-Type" && v == "text/plain"),
             passed,
             failed
         );
@@ -68,7 +70,7 @@ pub fn run_tests() {
             "200 OK - Content-Length header",
             r.headers
                 .iter()
-                .any(|&(k, v)| k == "Content-Length" && v == "5"),
+                .any(|(k, v)| k == "Content-Length" && v == "5"),
             passed,
             failed
         );
@@ -113,7 +115,7 @@ pub fn run_tests() {
             "301 - Location header",
             r.headers
                 .iter()
-                .any(|&(k, v)| k == "Location" && v == "http://example.com/"),
+                .any(|(k, v)| k == "Location" && v == "http://example.com/"),
             passed,
             failed
         );
