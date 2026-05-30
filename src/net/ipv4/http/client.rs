@@ -84,11 +84,19 @@ impl<'a> connection<'a> {
             .position(|w| w == b"\r\n\r\n")?
             + 4;
         let header_string = core::str::from_utf8(&raw_response[..header_lenght]).ok()?;
+
         let mut content_lenght = 0;
+        let mut keep_alive = false;
+
         for s in header_string.split("\r\n") {
             if s.contains("Content-Length") {
                 let splitted = s.split_once(":")?;
                 content_lenght = splitted.1.trim().parse::<usize>().ok()?;
+            }
+
+            if s.contains("Connection") {
+                let splitted = s.split_once(":")?;
+                keep_alive = splitted.1.trim() == "keep_alive";
             }
         }
         kdebug!("HTTP: content_lenght: {}", content_lenght);
@@ -97,6 +105,10 @@ impl<'a> connection<'a> {
             offset += socket.lock().read(&mut raw_response[offset..]);
         }
         kdebug!("HTTP: request completed {}", offset);
+
+        if !keep_alive {
+            socket.lock().close();
+        }
 
         parse_response(&raw_response)
     }
