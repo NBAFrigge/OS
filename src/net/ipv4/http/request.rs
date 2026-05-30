@@ -1,4 +1,4 @@
-use alloc::{format, vec::Vec};
+use alloc::{format, string::String, vec::Vec};
 
 use crate::{
     kinfo,
@@ -8,20 +8,15 @@ use crate::{
     },
 };
 
-pub struct request {
+pub struct Request {
     method: METHOD,
-    url: &'static str,
-    headers: Vec<(&'static str, &'static str)>,
+    url: String,
+    headers: Vec<(String, String)>,
     body: Vec<u8>,
 }
 
-impl request {
-    pub fn new(
-        method: METHOD,
-        url: &'static str,
-        headers: Vec<(&'static str, &'static str)>,
-        body: &[u8],
-    ) -> Self {
+impl Request {
+    pub fn new(method: METHOD, url: String, headers: Vec<(String, String)>, body: &[u8]) -> Self {
         Self {
             method,
             url,
@@ -31,7 +26,7 @@ impl request {
     }
 
     pub fn build(&self) -> Option<Vec<u8>> {
-        let parsed_url = parse_url(self.url)?;
+        let parsed_url = parse_url(self.url.as_str())?;
         let mut request_bytes: Vec<u8> = Vec::new();
 
         request_bytes.extend_from_slice(self.method.to_string().as_bytes());
@@ -78,10 +73,10 @@ pub fn run_tests() {
     let mut passed = 0;
     let mut failed = 0;
 
-    let result = request::new(
+    let result = Request::new(
         METHOD::GET,
-        "http://192.168.1.100:8080/benchmark",
-        alloc::vec![("Connection", "close")],
+        "http://192.168.1.100:8080/benchmark".into(),
+        alloc::vec![("Connection".into(), "close".into())],
         b"",
     )
     .build();
@@ -94,7 +89,13 @@ pub fn run_tests() {
         failed
     );
 
-    let result = request::new(METHOD::GET, "http://192.168.1.100/", alloc::vec![], b"").build();
+    let result = Request::new(
+        METHOD::GET,
+        "http://192.168.1.100/".into(),
+        alloc::vec![],
+        b"",
+    )
+    .build();
     let expected = b"GET / HTTP/1.1\r\nHost: 192.168.1.100\r\n\r\n";
     check!(
         "GET root path",
@@ -103,8 +104,13 @@ pub fn run_tests() {
         failed
     );
 
-    let result =
-        request::new(METHOD::GET, "http://192.168.1.100/test", alloc::vec![], b"").build();
+    let result = Request::new(
+        METHOD::GET,
+        "http://192.168.1.100/test".into(),
+        alloc::vec![],
+        b"",
+    )
+    .build();
     let expected = b"GET /test HTTP/1.1\r\nHost: 192.168.1.100\r\n\r\n";
     check!(
         "GET no body",
@@ -113,13 +119,16 @@ pub fn run_tests() {
         failed
     );
 
-    let result = request::new(METHOD::GET, "not-a-url", alloc::vec![], b"").build();
+    let result = Request::new(METHOD::GET, "not-a-url".into(), alloc::vec![], b"").build();
     check!("invalid url returns None", result.is_none(), passed, failed);
 
-    let result = request::new(
+    let result = Request::new(
         METHOD::POST,
-        "http://192.168.1.100/api",
-        alloc::vec![("Content-Type", "application/x-www-form-urlencoded")],
+        "http://192.168.1.100/api".into(),
+        alloc::vec![(
+            "Content-Type".into(),
+            "application/x-www-form-urlencoded".into()
+        )],
         b"hello=world",
     )
     .build();
@@ -131,8 +140,13 @@ pub fn run_tests() {
         failed
     );
 
-    let result =
-        request::new(METHOD::POST, "http://192.168.1.100/api", alloc::vec![], b"").build();
+    let result = Request::new(
+        METHOD::POST,
+        "http://192.168.1.100/api".into(),
+        alloc::vec![],
+        b"",
+    )
+    .build();
     let expected = b"POST /api HTTP/1.1\r\nHost: 192.168.1.100\r\n\r\n";
     check!(
         "POST empty body",

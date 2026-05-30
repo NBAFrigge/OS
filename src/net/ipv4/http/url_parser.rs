@@ -1,14 +1,14 @@
 use crate::kinfo;
 use alloc::vec::Vec;
 
-pub struct url_parsed<'a> {
+pub struct UrlParsed<'a> {
     pub scheme: &'a str,
     pub host: &'a str,
     pub port: u16,
     pub path: &'a str,
 }
 
-pub fn parse_url(url: &str) -> Option<url_parsed> {
+pub fn parse_url(url: &str) -> Option<UrlParsed> {
     let splitted_scheme: Vec<&str> = url.split("://").collect();
     if splitted_scheme.len() != 2 {
         return None;
@@ -23,7 +23,7 @@ pub fn parse_url(url: &str) -> Option<url_parsed> {
     }
 
     if index == splitted_scheme[1].len() {
-        return Some(url_parsed {
+        return Some(UrlParsed {
             scheme,
             host: splitted_scheme[1],
             port: 80,
@@ -50,7 +50,7 @@ pub fn parse_url(url: &str) -> Option<url_parsed> {
         path = splitted_host.1
     }
 
-    Some(url_parsed {
+    Some(UrlParsed {
         scheme,
         host,
         port,
