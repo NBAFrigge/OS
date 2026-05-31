@@ -13,6 +13,7 @@ pub struct Request {
     url: String,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+    pub timeout: usize,
 }
 
 impl Request {
@@ -22,6 +23,7 @@ impl Request {
             url,
             headers,
             body: body.to_vec(),
+            timeout: 200,
         }
     }
 

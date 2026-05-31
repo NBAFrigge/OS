@@ -2,6 +2,7 @@ use alloc::{str, vec::Vec};
 
 use crate::{
     command_handler::commands::sleep,
+    idt::interrupt::TICKS,
     kdebug, kerror,
     net::ipv4::{
         http::{
@@ -64,9 +65,11 @@ impl<'a> connection<'a> {
         let raw_request = request.build()?;
 
         socket.lock().write(&raw_request);
-        kdebug!("HTTP: {} bytes sent", raw_request.len());
 
-        sleep(100);
+        //TODO: finish timeout
+        let start_ticks = TICKS.load(core::sync::atomic::Ordering::Relaxed);
+
+        kdebug!("HTTP: {} bytes sent", raw_request.len());
 
         let mut raw_response = [0u8; 65536];
         let mut offset = 0;
@@ -76,6 +79,12 @@ impl<'a> connection<'a> {
             == None
         {
             offset += socket.lock().read(&mut raw_response[offset..]);
+            if (TICKS.load(core::sync::atomic::Ordering::Relaxed) - start_ticks) as usize
+                > request.timeout
+            {
+                kdebug!("HTTP: request timeout");
+                return None;
+            }
         }
         kdebug!("HTTP: header_lenght found at {}", offset);
 
@@ -103,6 +112,12 @@ impl<'a> connection<'a> {
 
         while offset < content_lenght + header_lenght {
             offset += socket.lock().read(&mut raw_response[offset..]);
+            if (TICKS.load(core::sync::atomic::Ordering::Relaxed) - start_ticks) as usize
+                > request.timeout
+            {
+                kdebug!("HTTP: request timeout");
+                return None;
+            }
         }
         kdebug!("HTTP: request completed {}", offset);
 
