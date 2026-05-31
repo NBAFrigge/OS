@@ -1,7 +1,6 @@
 use alloc::{str, vec::Vec};
 
 use crate::{
-    command_handler::commands::sleep,
     idt::interrupt::TICKS,
     kdebug, kerror,
     net::ipv4::{
@@ -105,7 +104,7 @@ impl<'a> connection<'a> {
 
             if s.contains("Connection") {
                 let splitted = s.split_once(":")?;
-                keep_alive = splitted.1.trim() == "keep_alive";
+                keep_alive = splitted.1.trim() == "keep-alive";
             }
         }
         kdebug!("HTTP: content_lenght: {}", content_lenght);
@@ -125,7 +124,7 @@ impl<'a> connection<'a> {
             socket.lock().close();
         }
 
-        parse_response(&raw_response)
+        parse_response(&raw_response[..offset])
     }
 }
 
