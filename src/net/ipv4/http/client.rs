@@ -56,9 +56,14 @@ impl<'a> connection<'a> {
             manager.get(&tuple)?.clone()
         };
 
+        let mut retry = 0;
         while socket.lock().state != TcpState::Established {
             kdebug!("HTTP send: waiting socket {} opening", self.local_port);
             sleep(10);
+            retry += 1;
+            if retry >= 10 {
+                return None;
+            }
         }
 
         let raw_request = request.build()?;
