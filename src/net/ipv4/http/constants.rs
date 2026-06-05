@@ -23,6 +23,26 @@ impl METHOD {
     }
 }
 
+pub enum HttpError {
+    Timeout,
+    ConnectionFailed,
+    ParseError,
+    DnsError,
+    SocketNotFound,
+}
+
+impl HttpError {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            HttpError::Timeout => "timeout",
+            HttpError::ConnectionFailed => "connection failed",
+            HttpError::ParseError => "parse error",
+            HttpError::DnsError => "dns error",
+            HttpError::SocketNotFound => "socket not found",
+        }
+    }
+}
+
 pub const SP: u8 = 0x20;
 pub const HTTP_VERSION: &'static str = "HTTP/1.1\r\n";
 pub const EMPTYLINE: &'static str = "\r\n";

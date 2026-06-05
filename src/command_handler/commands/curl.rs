@@ -110,9 +110,9 @@ pub fn cmd_curl(args: &str) {
 
     let req = Request::new(method, url, headers, &body_bytes);
     let resp = match client.send(req) {
-        Some(p) => p,
-        None => {
-            println!("request error");
+        Ok(p) => p,
+        Err(e) => {
+            println!("{}", e.to_string());
             return;
         }
     };

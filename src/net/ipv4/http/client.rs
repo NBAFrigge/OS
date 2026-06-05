@@ -5,6 +5,7 @@ use crate::{
     kdebug, kerror,
     net::ipv4::{
         http::{
+            constants::HttpError,
             request::Request,
             response::{parse_response, response},
         },
@@ -43,8 +44,7 @@ impl<'a> connection<'a> {
         Ok(())
     }
 
-    //TODO: add timeout
-    pub fn send(&self, request: Request) -> Option<response> {
+    pub fn send(&self, request: Request) -> Result<response, HttpError> {
         let tuple = TcpTuple {
             local_port: self.local_port,
             remote_ip: self.remote_ip,
@@ -53,7 +53,10 @@ impl<'a> connection<'a> {
 
         let socket = {
             let manager = TCP_SOCKET_MANAGER.lock();
-            manager.get(&tuple)?.clone()
+            manager
+                .get(&tuple)
+                .ok_or(HttpError::SocketNotFound)?
+                .clone()
         };
 
         let mut retry = 0;
@@ -61,16 +64,15 @@ impl<'a> connection<'a> {
             kdebug!("HTTP send: waiting socket {} opening", self.local_port);
             sleep(10);
             retry += 1;
-            if retry >= 10 {
-                return None;
+            if retry >= 20 {
+                return Err(HttpError::ConnectionFailed);
             }
         }
 
-        let raw_request = request.build()?;
+        let raw_request = request.build().ok_or(HttpError::ParseError)?;
 
         socket.lock().write(&raw_request);
 
-        //TODO: finish timeout
         let start_ticks = TICKS.load(core::sync::atomic::Ordering::Relaxed);
 
         kdebug!("HTTP: {} bytes sent", raw_request.len());
@@ -87,28 +89,35 @@ impl<'a> connection<'a> {
                 > request.timeout
             {
                 kdebug!("HTTP: request timeout");
-                return None;
+                return Err(HttpError::Timeout);
             }
         }
         kdebug!("HTTP: header_lenght found at {}", offset);
 
         let header_lenght = raw_response[..offset]
             .windows(4)
-            .position(|w| w == b"\r\n\r\n")?
+            .position(|w| w == b"\r\n\r\n")
+            .ok_or(HttpError::ParseError)?
             + 4;
-        let header_string = core::str::from_utf8(&raw_response[..header_lenght]).ok()?;
+        let header_string = core::str::from_utf8(&raw_response[..header_lenght])
+            .map_err(|_| HttpError::ParseError)?;
 
         let mut content_lenght = 0;
         let mut keep_alive = false;
 
         for s in header_string.split("\r\n") {
             if s.contains("Content-Length") {
-                let splitted = s.split_once(":")?;
-                content_lenght = splitted.1.trim().parse::<usize>().ok()?;
+                let splitted = s.split_once(":").ok_or(HttpError::ParseError)?;
+                content_lenght = splitted
+                    .1
+                    .trim()
+                    .parse::<usize>()
+                    .ok()
+                    .ok_or(HttpError::ParseError)?;
             }
 
             if s.contains("Connection") {
-                let splitted = s.split_once(":")?;
+                let splitted = s.split_once(":").ok_or(HttpError::ParseError)?;
                 keep_alive = splitted.1.trim() == "keep-alive";
             }
         }
@@ -120,7 +129,7 @@ impl<'a> connection<'a> {
                 > request.timeout
             {
                 kdebug!("HTTP: request timeout");
-                return None;
+                return Err(HttpError::Timeout);
             }
         }
         kdebug!("HTTP: request completed {}", offset);
@@ -129,7 +138,9 @@ impl<'a> connection<'a> {
             socket.lock().close();
         }
 
-        parse_response(&raw_response[..offset])
+        let resp = parse_response(&raw_response[..offset]).ok_or(HttpError::ParseError)?;
+
+        return Ok(resp);
     }
 }
 
