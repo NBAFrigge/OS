@@ -1,4 +1,5 @@
 pub mod arp_test;
+pub mod bench;
 pub mod curl;
 pub mod helpers;
 pub mod clear;

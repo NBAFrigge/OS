@@ -8,6 +8,7 @@ use crate::{
     },
 };
 
+#[derive(Clone)]
 pub struct Request {
     method: METHOD,
     url: String,

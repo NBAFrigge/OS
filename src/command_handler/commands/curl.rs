@@ -105,8 +105,14 @@ pub fn cmd_curl(args: &str) {
     let host = parsed_url.host.to_string();
     let port = parsed_url.port;
 
-    let mut client = client::connection::new(host.as_str(), port);
-    client.connect();
+    let mut client = match client::connection::new(host.as_str(), port) {
+        Ok(c) => c,
+        Err(e) => { println!("{}", e.to_string()); return; }
+    };
+    if let Err(e) = client.connect() {
+        println!("{}", e.to_string());
+        return;
+    }
 
     let req = Request::new(method, url, headers, &body_bytes);
     let resp = match client.send(req) {

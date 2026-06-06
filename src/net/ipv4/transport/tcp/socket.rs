@@ -173,11 +173,6 @@ fn send_segment(
 }
 
 pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
-    let mut socket = TcpSocket::new(remote_ip, remote_port);
-    let isn = generate_u32();
-    socket.send_unacked = isn;
-    socket.local_seq = isn.wrapping_add(1);
-
     let src_ip = if let Some(ip) = NETWORK_INTERFACE.lock().ip_addr {
         ip
     } else {
@@ -185,12 +180,45 @@ pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
         return 0;
     };
 
-    let mut syn = packet::TcpHeader::new(socket.tuple.local_port, remote_port, isn, 0, flags::SYN);
+    let local_port = {
+        let manager = TCP_SOCKET_MANAGER.lock();
+        loop {
+            let port = 49152 + generate_u16() % 16384;
+            let candidate = TcpTuple {
+                local_port: port,
+                remote_ip: *remote_ip,
+                remote_port,
+            };
+            if !manager.contains_key(&candidate) {
+                break port;
+            }
+        }
+    };
+
+    let isn = generate_u32();
+    let tuple = TcpTuple {
+        local_port,
+        remote_ip: *remote_ip,
+        remote_port,
+    };
+    let mut socket = TcpSocket {
+        tuple,
+        state: TcpState::SynSent,
+        send_unacked: isn,
+        local_seq: isn.wrapping_add(1),
+        remote_seq: 0,
+        rx_queue: VecDeque::new(),
+        tx_queue: VecDeque::new(),
+        retransmit_ticks: 0,
+        max_queue_size: 65536,
+        cwnd: MSS as u32,
+        ssthresh: u32::MAX,
+    };
+
+    let mut syn = packet::TcpHeader::new(local_port, remote_port, isn, 0, flags::SYN);
     syn.calculate_checksum(&src_ip, remote_ip, &[]);
     ipv4::protocol::send(*remote_ip, packet::PROTOCOL, syn.as_bytes());
-    socket.state = TcpState::SynSent;
 
-    let local_port = socket.tuple.local_port;
     TCP_SOCKET_MANAGER
         .lock()
         .insert(socket.tuple, Arc::new(Mutex::new(socket)));
@@ -361,6 +389,9 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                 }
                 socket.send_unacked = ack_num;
                 socket.retransmit_ticks = 0;
+            }
+            if (header.flags & flags::ACK) != 0 && socket.local_seq == ack_num {
+                socket.state = TcpState::Closed;
             }
         }
 

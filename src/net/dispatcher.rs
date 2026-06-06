@@ -101,7 +101,7 @@ pub fn poll_network() {
                         }
                         17 => {
                             // UDP
-                            handle_udp_packet(&ip_header.src_ip, payload);
+                            handle_udp_packet(&ip_header.src_ip, &ip_header.dst_ip, payload);
                         }
                         _ => {
                             ktrace!("IPv4: unknown protocol {}", ip_header.protocol);

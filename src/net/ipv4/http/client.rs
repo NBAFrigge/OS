@@ -19,14 +19,23 @@ use crate::{
 
 pub struct connection<'a> {
     host: &'a str,
-    remote_ip: [u8; 4],
+    pub remote_ip: [u8; 4],
     remote_port: u16,
     local_port: u16,
 }
 
 impl<'a> connection<'a> {
-    pub fn new(host: &'a str, port: u16) -> Self {
-        let ip = resolve_target(host).unwrap();
+    pub fn new(host: &'a str, port: u16) -> Result<Self, HttpError> {
+        let ip = resolve_target(host).ok_or(HttpError::DnsError)?;
+        Ok(Self {
+            host,
+            remote_ip: ip,
+            remote_port: port,
+            local_port: 0,
+        })
+    }
+
+    pub fn new_with_ip(host: &'a str, ip: [u8; 4], port: u16) -> Self {
         Self {
             host,
             remote_ip: ip,
@@ -35,13 +44,49 @@ impl<'a> connection<'a> {
         }
     }
 
-    pub fn connect(&mut self) -> Result<(), &'static str> {
+    pub fn connect(&mut self) -> Result<(), HttpError> {
         self.local_port = socket::connect(&self.remote_ip, self.remote_port);
         if self.local_port == 0 {
             kerror!("tcp connection error");
-            return Err("connection error");
+            return Err(HttpError::ConnectionFailed);
         }
+        let tuple = TcpTuple {
+            local_port: self.local_port,
+            remote_ip: self.remote_ip,
+            remote_port: self.remote_port,
+        };
+
+        let socket = {
+            let manager = TCP_SOCKET_MANAGER.lock();
+            manager
+                .get(&tuple)
+                .ok_or(HttpError::SocketNotFound)?
+                .clone()
+        };
+
+        let mut retry = 0;
+        while socket.lock().state != TcpState::Established {
+            kdebug!("HTTP send: waiting socket {} opening", self.local_port);
+            sleep(10);
+            retry += 1;
+            if retry >= 50 {
+                TCP_SOCKET_MANAGER.lock().remove(&tuple);
+                return Err(HttpError::ConnectionFailed);
+            }
+        }
+
         Ok(())
+    }
+
+    pub fn close(&self) {
+        let tuple = TcpTuple {
+            local_port: self.local_port,
+            remote_ip: self.remote_ip,
+            remote_port: self.remote_port,
+        };
+        if let Some(socket) = TCP_SOCKET_MANAGER.lock().get(&tuple).cloned() {
+            let _ = socket.lock().close();
+        }
     }
 
     pub fn send(&self, request: Request) -> Result<response, HttpError> {

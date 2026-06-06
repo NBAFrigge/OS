@@ -66,7 +66,7 @@ pub fn create_socket(port: u16) -> Arc<Mutex<UdpSocket>> {
     Arc::new(Mutex::new(UdpSocket::new(port)))
 }
 
-pub fn handle_udp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
+pub fn handle_udp_packet(src_ip: &[u8; 4], dst_ip: &[u8; 4], raw_packet: &[u8]) {
     if raw_packet.len() < 8 {
         ktrace!("Udp packet too short");
         return;
@@ -78,11 +78,9 @@ pub fn handle_udp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
         .min(raw_packet.len() - 8);
     let payload = &raw_packet[8..8 + payload_len];
 
-    let dst_ip = NETWORK_INTERFACE.lock().ip_addr.expect("IP not set");
-
     let checksum = header.checksum;
     let dst_port = header.dst_port;
-    if checksum != 0 && checksum != header.calculate_checksum(src_ip, &dst_ip, payload) {
+    if checksum != 0 && checksum != header.calculate_checksum(src_ip, dst_ip, payload) {
         kwarn!("UDP: checksum mismatch on port {}, dropping", dst_port);
         return;
     }

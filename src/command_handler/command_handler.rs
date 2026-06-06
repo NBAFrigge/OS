@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 
 use crate::command_handler::commands::arp_test::cmd_arp_test;
+use crate::command_handler::commands::bench::cmd_bench;
 use crate::command_handler::commands::curl::cmd_curl;
 use crate::command_handler::commands::clear::cmd_clear;
 use crate::command_handler::commands::echo::cmd_echo;
@@ -86,6 +87,10 @@ pub fn init_commands() {
     registry.push(Command {
         name: "curl",
         func: cmd_curl,
+    });
+    registry.push(Command {
+        name: "bench",
+        func: cmd_bench,
     });
 }
 
