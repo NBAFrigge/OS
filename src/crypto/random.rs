@@ -43,10 +43,12 @@ lazy_static! {
 }
 
 fn xor_shift() -> u64 {
-    let mut x = GLOBAL_ENTROPY.lock().pool;
+    let mut entropy = GLOBAL_ENTROPY.lock();
+    let mut x = entropy.pool;
     x ^= x << 13;
     x ^= x >> 7;
     x ^= x << 17;
+    entropy.pool = x;
     x
 }
 
