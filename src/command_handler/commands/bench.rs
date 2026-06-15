@@ -5,6 +5,7 @@ use alloc::{
 
 use crate::{
     idt::interrupt::TICKS,
+    kdebug,
     net::ipv4::http::{self, client, constants::HttpError, request, url_parser::parse_url},
     task::task::sleep,
 };
@@ -54,12 +55,20 @@ pub fn cmd_bench(args: &str) {
 
     println!("starting keep-alive bench");
 
-    let mut ka_client = match client::connection::new(host.as_str(), port) {
+    let mut ka_client = match client::connection::new(host.as_str(), port, true) {
         Ok(c) => c,
-        Err(e) => { println!("bench: {}", e.to_string()); return; }
+        Err(e) => {
+            println!("bench: {}", e.to_string());
+            return;
+        }
     };
     if let Err(e) = ka_client.connect() {
-        println!("bench: connect to {}:{} failed: {}", host, port, e.to_string());
+        println!(
+            "bench: connect to {}:{} failed: {}",
+            host,
+            port,
+            e.to_string()
+        );
         return;
     }
     let resolved_ip = ka_client.remote_ip;
@@ -70,6 +79,12 @@ pub fn cmd_bench(args: &str) {
     let mut ka_err_dns = 0usize;
     let mut ka_err_socket = 0usize;
     let mut ka_response_time_vec = Vec::<u64>::new();
+
+    while !ka_client.is_open() {
+        sleep(1);
+    }
+
+    kdebug!("connection established on port {}", ka_client.local_port);
 
     for _ in 0..num_requests {
         let start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
@@ -101,6 +116,8 @@ pub fn cmd_bench(args: &str) {
         ka_err_socket,
     );
 
+    kdebug!("keep-alive done");
+
     println!("starting per-request bench");
 
     let mut pr_err_timeout = 0usize;
@@ -112,7 +129,8 @@ pub fn cmd_bench(args: &str) {
 
     for _ in 0..num_requests {
         let start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
-        let mut pr_client = client::connection::new_with_ip(host.as_str(), resolved_ip, port);
+        let mut pr_client =
+            client::connection::new_with_ip(host.as_str(), resolved_ip, port, false);
         match pr_client.connect() {
             Ok(_) => {
                 let res = pr_client.send(request.clone());
@@ -160,6 +178,9 @@ fn print_results(
         println!("no successful requests");
     } else {
         let sum: u64 = times.iter().sum();
+        if sum == 0 {
+            return;
+        }
         let avg = sum / times.len() as u64;
         let p95 = times[times.len() * 95 / 100];
         let p99 = times[times.len() * 99 / 100];

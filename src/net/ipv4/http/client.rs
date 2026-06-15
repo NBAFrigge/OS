@@ -21,26 +21,29 @@ pub struct connection<'a> {
     host: &'a str,
     pub remote_ip: [u8; 4],
     remote_port: u16,
-    local_port: u16,
+    pub local_port: u16,
+    pub force_keep_alive: bool,
 }
 
 impl<'a> connection<'a> {
-    pub fn new(host: &'a str, port: u16) -> Result<Self, HttpError> {
+    pub fn new(host: &'a str, port: u16, force_ka: bool) -> Result<Self, HttpError> {
         let ip = resolve_target(host).ok_or(HttpError::DnsError)?;
         Ok(Self {
             host,
             remote_ip: ip,
             remote_port: port,
             local_port: 0,
+            force_keep_alive: force_ka,
         })
     }
 
-    pub fn new_with_ip(host: &'a str, ip: [u8; 4], port: u16) -> Self {
+    pub fn new_with_ip(host: &'a str, ip: [u8; 4], port: u16, force_ka: bool) -> Self {
         Self {
             host,
             remote_ip: ip,
             remote_port: port,
             local_port: 0,
+            force_keep_alive: force_ka,
         }
     }
 
@@ -89,6 +92,18 @@ impl<'a> connection<'a> {
         }
     }
 
+    pub fn is_open(&self) -> bool {
+        let tuple = TcpTuple {
+            local_port: self.local_port,
+            remote_ip: self.remote_ip,
+            remote_port: self.remote_port,
+        };
+        if let Some(socket) = TCP_SOCKET_MANAGER.lock().get(&tuple).cloned() {
+            return socket.lock().state == TcpState::Established;
+        }
+        false
+    }
+
     pub fn send(&self, request: Request) -> Result<response, HttpError> {
         let tuple = TcpTuple {
             local_port: self.local_port,
@@ -107,7 +122,7 @@ impl<'a> connection<'a> {
         let mut retry = 0;
         while socket.lock().state != TcpState::Established {
             kdebug!("HTTP send: waiting socket {} opening", self.local_port);
-            sleep(10);
+            sleep(11);
             retry += 1;
             if retry >= 20 {
                 return Err(HttpError::ConnectionFailed);
@@ -179,7 +194,7 @@ impl<'a> connection<'a> {
         }
         kdebug!("HTTP: request completed {}", offset);
 
-        if !keep_alive {
+        if !keep_alive && !self.force_keep_alive {
             socket.lock().close();
         }
 
