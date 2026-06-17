@@ -1,11 +1,15 @@
+use crate::apic::apic::send_eoi;
+use crate::apic::io_apic::add_redirect;
 use crate::drivers::pci::PciAddress;
+use crate::idt::interrupt::add_handler;
 use crate::memory::memory::PHYSICAL_MEMORY_OFFSET;
-use crate::{kinfo, kwarn};
+use crate::sync::IrqMutex;
+use crate::{kinfo, kwarn, net::dispatcher::poll_network};
 use alloc::vec::Vec;
 use core::ptr::{read_volatile, write_volatile};
 use core::sync::atomic::Ordering;
 use lazy_static::lazy_static;
-use spin::mutex::Mutex;
+use x86_64::structures::idt::InterruptStackFrame;
 use x86_64::structures::paging::FrameAllocator;
 
 const REG_CTRL: u32 = 0x0000;
@@ -25,6 +29,8 @@ const REG_TDLEN: u32 = 0x3808;
 const REG_TDH: u64 = 0x3810;
 const REG_TDT: u64 = 0x3818;
 const REG_TCTL: u32 = 0x0400;
+const REG_IMS: u32 = 0x00D0;
+const REG_ICR: u32 = 0x00C0;
 
 const RX_DESC_COUNT: usize = 32;
 const TX_DESC_COUNT: usize = 32;
@@ -86,6 +92,11 @@ impl E1000 {
             .ok_or("E1000 not found")?;
 
         nic.enable_bus_mastering();
+        let irq = nic.get_IRQ();
+        unsafe {
+            add_redirect(irq, irq + 32);
+        }
+        add_handler((32 + irq) as usize, packet_handler);
 
         let bar0 = nic.get_bar(0).ok_or("BAR0 not found")?;
         let base_addr = bar0.address + offset;
@@ -216,6 +227,10 @@ impl E1000 {
 
         drop(allocator_guard);
 
+        unsafe {
+            write_volatile((base_addr + REG_IMS as u64) as *mut u32, 0x80);
+        }
+
         kinfo!(
             "E1000 initialized, MAC: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             mac[0],
@@ -237,6 +252,7 @@ impl E1000 {
             tx_tail: 0,
         })
     }
+
     unsafe fn read_mac(base_addr: u64) -> [u8; 6] {
         let mut mac = [0u8; 6];
         for i in 0..3u32 {
@@ -320,5 +336,18 @@ impl E1000 {
 }
 
 lazy_static! {
-    pub static ref E1000_DRIVER: Mutex<Option<E1000>> = Mutex::new(None);
+    pub static ref E1000_DRIVER: IrqMutex<Option<E1000>> = IrqMutex::new(None);
+}
+
+extern "x86-interrupt" fn packet_handler(_stack_frame: InterruptStackFrame) {
+    let base_addr = E1000_DRIVER.lock().as_ref().map(|d| d.base_addr);
+    if let Some(base_addr) = base_addr {
+        unsafe {
+            read_volatile((base_addr + REG_ICR as u64) as *const u32);
+        }
+    }
+    poll_network();
+    unsafe {
+        send_eoi();
+    }
 }

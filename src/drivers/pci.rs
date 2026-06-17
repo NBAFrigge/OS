@@ -254,4 +254,14 @@ impl PciAddress {
             data_port.write(command | (1 << 2));
         }
     }
+
+    pub fn get_IRQ(self) -> u8 {
+        let addr = PciAddress::new(self.bus(), self.device(), self.function(), 0x3C);
+        let mut addr_port = Port::<u32>::new(PCI_CONFIG_ADDR);
+        let mut data_port = Port::<u32>::new(PCI_CONFIG_DATA);
+        unsafe {
+            addr_port.write(addr.raw());
+            data_port.read() as u8
+        }
+    }
 }

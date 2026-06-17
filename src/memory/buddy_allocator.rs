@@ -1,5 +1,5 @@
 use core::alloc::{GlobalAlloc, Layout};
-use spin::Mutex;
+use crate::sync::IrqMutex;
 
 pub const PAGE_SIZE: usize = 4096;
 pub const MAX_ORDERS: usize = 11;
@@ -146,14 +146,14 @@ impl BuddyAllocator {
 
 unsafe impl Send for BuddyAllocator {}
 
-pub struct LockedBuddy(Mutex<BuddyAllocator>);
+pub struct LockedBuddy(IrqMutex<BuddyAllocator>);
 
 impl LockedBuddy {
     pub const fn new() -> Self {
-        LockedBuddy(Mutex::new(BuddyAllocator::new()))
+        LockedBuddy(IrqMutex::new(BuddyAllocator::new()))
     }
 
-    pub fn lock(&self) -> spin::MutexGuard<BuddyAllocator> {
+    pub fn lock(&self) -> crate::sync::IrqMutexGuard<BuddyAllocator> {
         self.0.lock()
     }
 }

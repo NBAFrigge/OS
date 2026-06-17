@@ -3,7 +3,7 @@ use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use spin::Mutex;
+use crate::sync::IrqMutex;
 
 use crate::net::interface::NETWORK_INTERFACE;
 use crate::net::ipv4;
@@ -32,7 +32,7 @@ impl UdpSocket {
         if manager.contains_key(&port) {
             return Err("Port already in use");
         }
-        let socket = Arc::new(Mutex::new(UdpSocket::new(port)));
+        let socket = Arc::new(IrqMutex::new(UdpSocket::new(port)));
         manager.insert(port, Arc::clone(&socket));
         Ok(socket)
     }
@@ -60,10 +60,10 @@ impl UdpSocket {
     }
 }
 
-pub type SocketHandle = Arc<Mutex<UdpSocket>>;
+pub type SocketHandle = Arc<IrqMutex<UdpSocket>>;
 
-pub fn create_socket(port: u16) -> Arc<Mutex<UdpSocket>> {
-    Arc::new(Mutex::new(UdpSocket::new(port)))
+pub fn create_socket(port: u16) -> Arc<IrqMutex<UdpSocket>> {
+    Arc::new(IrqMutex::new(UdpSocket::new(port)))
 }
 
 pub fn handle_udp_packet(src_ip: &[u8; 4], dst_ip: &[u8; 4], raw_packet: &[u8]) {
@@ -102,6 +102,6 @@ pub fn handle_udp_packet(src_ip: &[u8; 4], dst_ip: &[u8; 4], raw_packet: &[u8]) 
 }
 
 lazy_static! {
-    pub static ref UDP_SOCKET_MANAGER: Mutex<BTreeMap<u16, SocketHandle>> =
-        Mutex::new(BTreeMap::new());
+    pub static ref UDP_SOCKET_MANAGER: IrqMutex<BTreeMap<u16, SocketHandle>> =
+        IrqMutex::new(BTreeMap::new());
 }

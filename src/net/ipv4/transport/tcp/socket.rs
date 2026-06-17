@@ -3,7 +3,8 @@ use alloc::{
     sync::Arc,
 };
 use lazy_static::lazy_static;
-use spin::Mutex;
+
+use crate::sync::IrqMutex;
 
 use crate::{
     crypto::random::{generate_u16, generate_u32},
@@ -19,7 +20,7 @@ use crate::{
 
 use packet::flags;
 
-const SYN_RETRANSMIT_INTERVAL: u32 = 500;
+const SYN_RETRANSMIT_INTERVAL: u32 = 40;
 const DATA_RETRANSMIT_INTERVAL: u32 = 1000;
 const MSS: usize = 536;
 
@@ -221,7 +222,7 @@ pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
 
     TCP_SOCKET_MANAGER
         .lock()
-        .insert(socket.tuple, Arc::new(Mutex::new(socket)));
+        .insert(socket.tuple, Arc::new(IrqMutex::new(socket)));
 
     local_port
 }
@@ -356,7 +357,21 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
 
         TcpState::FinWait1 => {
             if (header.flags & flags::ACK) != 0 && ack_num == socket.local_seq {
-                socket.state = TcpState::FinWait2;
+                if (header.flags & flags::FIN) != 0 {
+                    socket.remote_seq = socket.remote_seq.wrapping_add(1);
+                    let mut ack = TcpHeader::new(
+                        socket.tuple.local_port,
+                        socket.tuple.remote_port,
+                        socket.local_seq,
+                        socket.remote_seq,
+                        flags::ACK,
+                    );
+                    ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
+                    ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
+                    socket.state = TcpState::Closed;
+                } else {
+                    socket.state = TcpState::FinWait2;
+                }
             }
         }
 
@@ -558,9 +573,9 @@ pub fn tcp_tick() {
         }
     }
 }
-pub type SocketHandle = Arc<Mutex<TcpSocket>>;
+pub type SocketHandle = Arc<IrqMutex<TcpSocket>>;
 
 lazy_static! {
-    pub static ref TCP_SOCKET_MANAGER: Mutex<BTreeMap<TcpTuple, Arc<Mutex<TcpSocket>>>> =
-        Mutex::new(BTreeMap::new());
+    pub static ref TCP_SOCKET_MANAGER: IrqMutex<BTreeMap<TcpTuple, Arc<IrqMutex<TcpSocket>>>> =
+        IrqMutex::new(BTreeMap::new());
 }

@@ -1,5 +1,5 @@
 use crate::ktrace;
-use crate::net::ipv4::transport::tcp::socket::{handle_tcp_packet, tcp_tick};
+use crate::net::ipv4::transport::tcp::socket::handle_tcp_packet;
 use crate::net::{
     arp,
     e1000::E1000_DRIVER,
@@ -119,10 +119,3 @@ pub fn poll_network() {
     }
 }
 
-pub extern "C" fn network_task_entry() {
-    loop {
-        poll_network();
-        tcp_tick();
-        crate::task::task::yield_now();
-    }
-}

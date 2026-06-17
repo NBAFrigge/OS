@@ -3,7 +3,10 @@ use alloc::{
     vec::Vec,
 };
 
+use core::sync::atomic::Ordering;
+
 use crate::{
+    idt::interrupt::TICKS,
     kdebug,
     net::ipv4::http::{client, constants::METHOD, request::Request, url_parser::parse_url},
 };
@@ -11,7 +14,7 @@ use crate::{
 pub fn cmd_curl(args: &str) {
     let tokens = tokenize(args);
     if tokens.is_empty() {
-        println!("Usage: curl [-X METHOD] [-H \"header: value\"] [-d body] <url>");
+        println!("Usage: curl [-X METHOD] [-H \"header: value\"] [-d body] [--time] <url>");
         return;
     }
 
@@ -19,6 +22,7 @@ pub fn cmd_curl(args: &str) {
     let mut headers: Vec<(String, String)> = Vec::new();
     let mut body: Option<String> = None;
     let mut url: Option<String> = None;
+    let mut show_time = false;
 
     let mut i = 0;
     while i < tokens.len() {
@@ -65,6 +69,9 @@ pub fn cmd_curl(args: &str) {
                 }
                 body = Some(tokens[i].clone());
             }
+            "--time" => {
+                show_time = true;
+            }
             arg if arg.starts_with('-') => {
                 println!("curl: unknown option {}", arg);
                 return;
@@ -105,6 +112,8 @@ pub fn cmd_curl(args: &str) {
     let host = parsed_url.host.to_string();
     let port = parsed_url.port;
 
+    let t0 = TICKS.load(Ordering::Relaxed);
+
     let mut client = match client::connection::new(host.as_str(), port, false) {
         Ok(c) => c,
         Err(e) => {
@@ -112,10 +121,15 @@ pub fn cmd_curl(args: &str) {
             return;
         }
     };
+
+    let t_dns = TICKS.load(Ordering::Relaxed);
+
     if let Err(e) = client.connect() {
         println!("{}", e.to_string());
         return;
     }
+
+    let t_connect = TICKS.load(Ordering::Relaxed);
 
     let req = Request::new(method, url, headers, &body_bytes);
     let resp = match client.send(req) {
@@ -126,9 +140,18 @@ pub fn cmd_curl(args: &str) {
         }
     };
 
+    let t_done = TICKS.load(Ordering::Relaxed);
+
     kdebug!("status_code: {}", resp.status_code);
 
     println!("{}", resp.status_code);
+
+    if show_time {
+        println!("dns:      {} ms", t_dns - t0);
+        println!("connect:  {} ms", t_connect - t_dns);
+        println!("request:  {} ms", t_done - t_connect);
+        println!("total:    {} ms", t_done - t0);
+    }
 }
 
 fn tokenize(input: &str) -> Vec<String> {

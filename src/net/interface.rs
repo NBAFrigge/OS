@@ -1,6 +1,7 @@
 use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use lazy_static::lazy_static;
-use spin::Mutex;
+
+use crate::sync::IrqMutex;
 
 use crate::{
     kerror,
@@ -86,5 +87,5 @@ impl Interface {
 }
 
 lazy_static! {
-    pub static ref NETWORK_INTERFACE: Mutex<Interface> = Mutex::new(Interface::new());
+    pub static ref NETWORK_INTERFACE: IrqMutex<Interface> = IrqMutex::new(Interface::new());
 }

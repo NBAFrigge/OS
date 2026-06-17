@@ -21,7 +21,7 @@ use crate::{
     task::task::sleep,
 };
 
-fn get_socket() -> alloc::sync::Arc<spin::Mutex<udp::socket::UdpSocket>> {
+fn get_socket() -> alloc::sync::Arc<crate::sync::IrqMutex<udp::socket::UdpSocket>> {
     loop {
         let mut manager = UDP_SOCKET_MANAGER.lock();
         if let Some(socket_arc) = manager.get(&68).cloned() {

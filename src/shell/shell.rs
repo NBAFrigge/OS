@@ -2,8 +2,9 @@ use core::{ptr::null, sync::atomic::Ordering};
 
 use alloc::string::String;
 use lazy_static::lazy_static;
-use spin::Mutex;
 use x86_64::instructions::interrupts::without_interrupts;
+
+use crate::sync::IrqMutex;
 
 use crate::{
     command_handler::command_handler::run_command,
@@ -135,6 +136,6 @@ pub extern "C" fn shell_task() -> ! {
 }
 
 lazy_static! {
-    pub static ref SHELL: Mutex<Shell> = Mutex::new(Shell::new());
-    pub static ref PENDING_COMMAND: Mutex<Option<String>> = Mutex::new(None);
+    pub static ref SHELL: IrqMutex<Shell> = IrqMutex::new(Shell::new());
+    pub static ref PENDING_COMMAND: IrqMutex<Option<String>> = IrqMutex::new(None);
 }

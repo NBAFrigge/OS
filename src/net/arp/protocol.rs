@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use lazy_static::lazy_static;
-use spin::Mutex;
+
+use crate::sync::IrqMutex;
 
 use crate::net::{
     arp::arp_struct::{self, ArpPacket},
@@ -114,5 +115,5 @@ pub fn handle_packet(arp_packet: ArpPacket) {
 }
 
 lazy_static! {
-    pub static ref ArpTable: Mutex<BTreeMap<[u8; 4], ArpTableEntry>> = Mutex::new(BTreeMap::new());
+    pub static ref ArpTable: IrqMutex<BTreeMap<[u8; 4], ArpTableEntry>> = IrqMutex::new(BTreeMap::new());
 }

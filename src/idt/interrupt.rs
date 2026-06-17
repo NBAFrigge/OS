@@ -1,6 +1,7 @@
 use core::arch::naked_asm;
 use core::sync::atomic::{AtomicBool, AtomicU64};
 use lazy_static::lazy_static;
+use spin::Mutex;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
@@ -19,24 +20,40 @@ pub static CTRL_C_PRESSED: AtomicBool = AtomicBool::new(false);
 static CTRL_HELD: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
-    static ref IDT: InterruptDescriptorTable = {
-        let mut idt = InterruptDescriptorTable::new();
-        idt.divide_error.set_handler_fn(divide_by_zero_handler);
-        idt.debug.set_handler_fn(debug_handler);
-        idt.non_maskable_interrupt
+    static ref IDT: Mutex<InterruptDescriptorTable> = {
+        let idt = Mutex::new(InterruptDescriptorTable::new());
+        let mut locked_idt = idt.lock();
+        locked_idt
+            .divide_error
+            .set_handler_fn(divide_by_zero_handler);
+        locked_idt.debug.set_handler_fn(debug_handler);
+        locked_idt
+            .non_maskable_interrupt
             .set_handler_fn(non_maskable_interrupt_handler);
-        idt.breakpoint.set_handler_fn(breakpoint_handler);
-        idt.overflow.set_handler_fn(overflow_handler);
-        idt.double_fault.set_handler_fn(double_fault_handler);
-        idt.page_fault.set_handler_fn(page_fault_handler);
-        idt[KEYBOARD_INTERRUPT_ID as usize].set_handler_fn(keyboard_handler);
-        idt[TIMER_INTERRUPT_ID as usize].set_handler_fn(timer_handler);
+        locked_idt.breakpoint.set_handler_fn(breakpoint_handler);
+        locked_idt.overflow.set_handler_fn(overflow_handler);
+        locked_idt.double_fault.set_handler_fn(double_fault_handler);
+        locked_idt.page_fault.set_handler_fn(page_fault_handler);
+        locked_idt[KEYBOARD_INTERRUPT_ID as usize].set_handler_fn(keyboard_handler);
+        locked_idt[TIMER_INTERRUPT_ID as usize].set_handler_fn(timer_handler);
+        drop(locked_idt);
         idt
     };
 }
 
 pub fn init_idt() {
-    IDT.load();
+    let idt = IDT.lock();
+    unsafe {
+        idt.load_unsafe();
+    };
+    drop(idt)
+}
+
+pub fn add_handler(index_id: usize, f: extern "x86-interrupt" fn(InterruptStackFrame)) {
+    let mut idt = IDT.lock();
+    idt[index_id].set_handler_fn(f);
+    unsafe { idt.load_unsafe() }
+    drop(idt);
 }
 
 macro_rules! catchall_handler {
@@ -183,6 +200,8 @@ extern "C" fn timer_tick_handler(stack_pointer: usize) -> usize {
         crate::apic::apic::send_eoi();
     }
 
+    crate::net::dispatcher::poll_network();
+    crate::net::ipv4::transport::tcp::socket::tcp_tick();
     GLOBAL_TASK_MANAGER.lock().rotate(stack_pointer)
 }
 

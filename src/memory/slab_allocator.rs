@@ -1,6 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use spin::mutex::Mutex;
+use crate::sync::IrqMutex;
 
 use crate::memory::buddy_allocator::{BUDDYALLOCATOR, PAGE_SIZE};
 
@@ -206,14 +206,14 @@ impl SlabManager {
 
 unsafe impl Send for SlabManager {}
 
-pub struct LockedSblab(Mutex<SlabManager>);
+pub struct LockedSblab(IrqMutex<SlabManager>);
 
 impl LockedSblab {
     pub const fn new() -> Self {
-        LockedSblab(Mutex::new(SlabManager::new()))
+        LockedSblab(IrqMutex::new(SlabManager::new()))
     }
 
-    pub fn lock(&self) -> spin::MutexGuard<SlabManager> {
+    pub fn lock(&self) -> crate::sync::IrqMutexGuard<SlabManager> {
         self.0.lock()
     }
 }

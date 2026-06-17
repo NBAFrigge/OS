@@ -1,7 +1,8 @@
 use core::fmt;
 use lazy_static::lazy_static;
-use spin::Mutex;
 use volatile::Volatile;
+
+use crate::sync::IrqMutex;
 
 use crate::shell::shell::SHELL;
 
@@ -218,14 +219,7 @@ impl Writer {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        if WRITER.is_locked() {
-            unsafe {
-                WRITER.force_unlock();
-            }
-        }
-        WRITER.lock().write_fmt(args).unwrap();
-    });
+    WRITER.lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]
@@ -240,5 +234,5 @@ macro_rules! println {
 }
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer::new());
+    pub static ref WRITER: IrqMutex<Writer> = IrqMutex::new(Writer::new());
 }

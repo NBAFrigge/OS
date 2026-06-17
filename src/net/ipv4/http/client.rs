@@ -1,4 +1,5 @@
-use alloc::{str, vec::Vec};
+use alloc::{str, vec, vec::Vec};
+use x86_64::instructions::hlt;
 
 use crate::{
     idt::interrupt::TICKS,
@@ -11,11 +12,13 @@ use crate::{
         },
         transport::{
             tcp::socket::{self, TcpState, TcpTuple, TCP_SOCKET_MANAGER},
-            udp::dns::solver::DnsResolver,
+            udp::{dhcp::packet::constants::DHCP_MAGIC_COOKIE, dns::solver::DnsResolver},
         },
     },
     task::task::sleep,
 };
+
+const CONN_TIMEOUT: u64 = 300;
 
 pub struct connection<'a> {
     host: &'a str,
@@ -67,12 +70,10 @@ impl<'a> connection<'a> {
                 .clone()
         };
 
-        let mut retry = 0;
+        let t_start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
         while socket.lock().state != TcpState::Established {
-            kdebug!("HTTP send: waiting socket {} opening", self.local_port);
-            sleep(10);
-            retry += 1;
-            if retry >= 50 {
+            hlt();
+            if TICKS.load(core::sync::atomic::Ordering::Relaxed) - t_start >= CONN_TIMEOUT {
                 TCP_SOCKET_MANAGER.lock().remove(&tuple);
                 return Err(HttpError::ConnectionFailed);
             }
@@ -121,7 +122,6 @@ impl<'a> connection<'a> {
 
         let mut retry = 0;
         while socket.lock().state != TcpState::Established {
-            kdebug!("HTTP send: waiting socket {} opening", self.local_port);
             sleep(11);
             retry += 1;
             if retry >= 20 {
@@ -137,7 +137,7 @@ impl<'a> connection<'a> {
 
         kdebug!("HTTP: {} bytes sent", raw_request.len());
 
-        let mut raw_response = [0u8; 65536];
+        let mut raw_response = vec![0u8; 65536];
         let mut offset = 0;
         while raw_response[..offset]
             .windows(4)

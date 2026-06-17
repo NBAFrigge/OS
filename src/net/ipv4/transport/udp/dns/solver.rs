@@ -195,7 +195,7 @@ fn skip_question_section(payload: &[u8]) -> usize {
     pos
 }
 
-fn get_socket() -> alloc::sync::Arc<spin::Mutex<udp::socket::UdpSocket>> {
+fn get_socket() -> alloc::sync::Arc<crate::sync::IrqMutex<udp::socket::UdpSocket>> {
     let port = get_dns_port();
     loop {
         let manager = UDP_SOCKET_MANAGER.lock();

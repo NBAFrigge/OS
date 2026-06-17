@@ -1,14 +1,15 @@
 use lazy_static::lazy_static;
-use spin::Mutex;
 use uart_16550::SerialPort;
+
+use crate::sync::IrqMutex;
 
 const COM1: u16 = 0x3F8;
 
 lazy_static! {
-    pub static ref SERIAL_LOGGER: Mutex<SerialPort> = {
+    pub static ref SERIAL_LOGGER: IrqMutex<SerialPort> = {
         let mut port = unsafe { SerialPort::new(COM1) };
         port.init();
-        Mutex::new(port)
+        IrqMutex::new(port)
     };
 }
 
