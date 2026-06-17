@@ -48,7 +48,11 @@ fn print_results(label: &str, times: &[u128], errs: &Errors) {
         let avg = sum / times.len() as u128;
         let p95 = percentile(times, 95);
         let p99 = percentile(times, 99);
-        let req_s = if sum > 0 { times.len() as u128 * 1_000_000 / sum } else { 0 };
+        let req_s = if sum > 0 {
+            times.len() as u128 * 1_000_000 / sum
+        } else {
+            0
+        };
         println!("min:    {} µs", times[0]);
         println!("max:    {} µs", times[times.len() - 1]);
         println!("avg:    {} µs", avg);
@@ -130,7 +134,10 @@ fn bench_keep_alive(parsed: &ParsedUrl, num_requests: usize) -> (Vec<u128>, Erro
                 errs.conn += 1;
                 match TcpStream::connect(&addr) {
                     Ok(s) => stream = s,
-                    Err(_) => { errs.conn += 1; break; }
+                    Err(_) => {
+                        errs.conn += 1;
+                        break;
+                    }
                 }
             }
         }
