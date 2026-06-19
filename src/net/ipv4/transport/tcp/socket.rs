@@ -218,11 +218,12 @@ pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
 
     let mut syn = packet::TcpHeader::new(local_port, remote_port, isn, 0, flags::SYN);
     syn.calculate_checksum(&src_ip, remote_ip, &[]);
-    ipv4::protocol::send(*remote_ip, packet::PROTOCOL, syn.as_bytes());
 
     TCP_SOCKET_MANAGER
         .lock()
         .insert(socket.tuple, Arc::new(IrqMutex::new(socket)));
+
+    ipv4::protocol::send(*remote_ip, packet::PROTOCOL, syn.as_bytes());
 
     local_port
 }
