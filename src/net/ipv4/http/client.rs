@@ -106,6 +106,8 @@ impl<'a> connection<'a> {
     }
 
     pub fn send(&self, request: Request) -> Result<response, HttpError> {
+        let t_start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
+
         let tuple = TcpTuple {
             local_port: self.local_port,
             remote_ip: self.remote_ip,
@@ -131,34 +133,39 @@ impl<'a> connection<'a> {
 
         let raw_request = request.build().ok_or(HttpError::ParseError)?;
 
+        let t0 = TICKS.load(core::sync::atomic::Ordering::Relaxed);
         socket.lock().write(&raw_request);
+        let t1 = TICKS.load(core::sync::atomic::Ordering::Relaxed);
 
-        let start_ticks = TICKS.load(core::sync::atomic::Ordering::Relaxed);
-
-        kdebug!("HTTP: {} bytes sent", raw_request.len());
+        let start_ticks = t0;
 
         let mut raw_response = vec![0u8; 65536];
         let mut offset = 0;
-        while raw_response[..offset]
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n")
-            == None
-        {
-            offset += socket.lock().read(&mut raw_response[offset..]);
+        let mut header_lenght = 0;
+        loop {
+            let prev = offset;
+            let n = socket.lock().read(&mut raw_response[offset..]);
+            offset += n;
+            if n == 0 {
+                hlt();
+            }
             if (TICKS.load(core::sync::atomic::Ordering::Relaxed) - start_ticks) as usize
                 > request.timeout
             {
                 kdebug!("HTTP: request timeout");
                 return Err(HttpError::Timeout);
             }
+            let search_from = prev.saturating_sub(3);
+            if let Some(pos) = raw_response[search_from..offset]
+                .windows(4)
+                .position(|w| w == b"\r\n\r\n")
+            {
+                header_lenght = search_from + pos + 4;
+                break;
+            }
         }
-        kdebug!("HTTP: header_lenght found at {}", offset);
+        let t2 = TICKS.load(core::sync::atomic::Ordering::Relaxed);
 
-        let header_lenght = raw_response[..offset]
-            .windows(4)
-            .position(|w| w == b"\r\n\r\n")
-            .ok_or(HttpError::ParseError)?
-            + 4;
         let header_string = core::str::from_utf8(&raw_response[..header_lenght])
             .map_err(|_| HttpError::ParseError)?;
 
@@ -181,7 +188,6 @@ impl<'a> connection<'a> {
                 keep_alive = splitted.1.trim() == "keep-alive";
             }
         }
-        kdebug!("HTTP: content_lenght: {}", content_lenght);
 
         while offset < content_lenght + header_lenght {
             offset += socket.lock().read(&mut raw_response[offset..]);
@@ -192,13 +198,24 @@ impl<'a> connection<'a> {
                 return Err(HttpError::Timeout);
             }
         }
-        kdebug!("HTTP: request completed {}", offset);
+        let t3 = TICKS.load(core::sync::atomic::Ordering::Relaxed);
+
+        let resp = parse_response(&raw_response[..offset]).ok_or(HttpError::ParseError)?;
+        let t4 = TICKS.load(core::sync::atomic::Ordering::Relaxed);
+
+        println!(
+            "[timing] setup={}ms write={}ms header={}ms body={}ms parse={}ms total={}ms",
+            t0 - t_start,
+            t1 - t0,
+            t2 - t1,
+            t3 - t2,
+            t4 - t3,
+            t4 - t_start
+        );
 
         if !keep_alive && !self.force_keep_alive {
             socket.lock().close();
         }
-
-        let resp = parse_response(&raw_response[..offset]).ok_or(HttpError::ParseError)?;
 
         return Ok(resp);
     }
