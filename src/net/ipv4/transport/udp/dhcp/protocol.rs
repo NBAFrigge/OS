@@ -5,6 +5,7 @@ use crate::{
     idt::interrupt::TICKS,
     kdebug, kerror,
     net::{
+        arp::protocol::resolve_mac,
         interface::NETWORK_INTERFACE,
         ipv4::transport::udp::{
             self,
@@ -155,6 +156,7 @@ pub fn dhcp_task() {
                 interface.subnet_mask = Some(subnet_mask);
                 interface.gateway_ip = Some(gateway);
                 interface.dns = Some(dns);
+                let hw_addr = interface.hw_addr.unwrap_or([0, 0, 0, 0, 0, 0]);
                 drop(interface);
 
                 kdebug!("DHCP: Network fully configured!");
@@ -180,6 +182,8 @@ pub fn dhcp_task() {
                     gateway[3]
                 );
                 kdebug!("DNS:     {}.{}.{}.{}", dns[0], dns[1], dns[2], dns[3]);
+
+                resolve_mac(&gateway, assigned_ip, hw_addr);
                 break;
             } else {
                 kerror!("DHCP: ACK timeout, retrying...");

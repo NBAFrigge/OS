@@ -71,9 +71,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         memory::memory::init(&boot_info.memory_map, boot_info.physical_memory_offset);
     }
 
-    net::ipv4::http::url_parser::run_tests();
-    net::ipv4::http::request::run_tests();
-    net::ipv4::http::response::run_tests();
+    #[cfg(feature = "tests")]
+    {
+        net::ipv4::http::url_parser::run_tests();
+        net::ipv4::http::request::run_tests();
+        net::ipv4::http::response::run_tests();
+    }
+
     command_handler::command_handler::init_commands();
 
     let e1000 = E1000::init().unwrap_or_else(|err| {

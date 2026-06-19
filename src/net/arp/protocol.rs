@@ -46,7 +46,10 @@ pub fn resolve_mac(
 
     kdebug!(
         "ARP: sending request for {}.{}.{}.{}",
-        ip_target[0], ip_target[1], ip_target[2], ip_target[3]
+        ip_target[0],
+        ip_target[1],
+        ip_target[2],
+        ip_target[3]
     );
 
     let arp_packet = ArpPacket::new(
@@ -78,8 +81,10 @@ pub fn handle_packet(arp_packet: ArpPacket) {
             if arp_packet.target_proto_addr == our_ip {
                 kdebug!(
                     "ARP: reply to {}.{}.{}.{}",
-                    arp_packet.sender_proto_addr[0], arp_packet.sender_proto_addr[1],
-                    arp_packet.sender_proto_addr[2], arp_packet.sender_proto_addr[3]
+                    arp_packet.sender_proto_addr[0],
+                    arp_packet.sender_proto_addr[1],
+                    arp_packet.sender_proto_addr[2],
+                    arp_packet.sender_proto_addr[3]
                 );
                 let reply = ArpPacket::new(
                     arp_struct::ArpOperation::Reply,
@@ -88,17 +93,25 @@ pub fn handle_packet(arp_packet: ArpPacket) {
                     arp_packet.sender_hw_addr,
                     arp_packet.sender_proto_addr,
                 );
-                NETWORK_INTERFACE.lock().send_arp_to(&reply, arp_packet.sender_hw_addr);
+                NETWORK_INTERFACE
+                    .lock()
+                    .send_arp_to(&reply, arp_packet.sender_hw_addr);
             }
         }
     } else if arp_packet.operation == arp_struct::ArpOperation::Reply as u16 {
         let ip = arp_packet.sender_proto_addr;
         kdebug!(
             "ARP: resolved {}.{}.{}.{} -> {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-            ip[0], ip[1], ip[2], ip[3],
-            arp_packet.sender_hw_addr[0], arp_packet.sender_hw_addr[1],
-            arp_packet.sender_hw_addr[2], arp_packet.sender_hw_addr[3],
-            arp_packet.sender_hw_addr[4], arp_packet.sender_hw_addr[5]
+            ip[0],
+            ip[1],
+            ip[2],
+            ip[3],
+            arp_packet.sender_hw_addr[0],
+            arp_packet.sender_hw_addr[1],
+            arp_packet.sender_hw_addr[2],
+            arp_packet.sender_hw_addr[3],
+            arp_packet.sender_hw_addr[4],
+            arp_packet.sender_hw_addr[5]
         );
         let mut table = ArpTable.lock();
         table.insert(
@@ -115,5 +128,6 @@ pub fn handle_packet(arp_packet: ArpPacket) {
 }
 
 lazy_static! {
-    pub static ref ArpTable: IrqMutex<BTreeMap<[u8; 4], ArpTableEntry>> = IrqMutex::new(BTreeMap::new());
+    pub static ref ArpTable: IrqMutex<BTreeMap<[u8; 4], ArpTableEntry>> =
+        IrqMutex::new(BTreeMap::new());
 }

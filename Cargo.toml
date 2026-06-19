@@ -30,3 +30,6 @@ run-args = [
   "filter-dump,id=dump0,netdev=net0,file=/tmp/os_net.pcap",
 ]
 test-success-exit-code = 33
+
+[features]
+tests = []
