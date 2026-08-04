@@ -46,12 +46,16 @@ pub unsafe fn init() {
     pit_data.write(((latch >> 8) & 0xFF) as u8);
 
     write_volatile(initial_count_ptr, 0xFFFFFFFF);
+    let tsc_start = core::arch::x86_64::_rdtsc();
 
     while (pit_read_status() & 0x80) == 0 {}
 
+    let tsc_end = core::arch::x86_64::_rdtsc();
     let current_apic = read_volatile(current_count_ptr);
     let ticks_in_10ms = 0xFFFFFFFF - current_apic;
     let ticks_per_ms = ticks_in_10ms / 10;
+
+    crate::timer::tsc::set_calibration((tsc_end - tsc_start) / 10_000);
 
     write_volatile(initial_count_ptr, 0);
     write_volatile(lvt_ptr, get_lvt_value(TIMER_MODE_PERIODIC));

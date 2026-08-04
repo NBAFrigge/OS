@@ -4,10 +4,10 @@ use alloc::{
 };
 
 use crate::{
-    idt::interrupt::TICKS,
     kdebug,
     net::ipv4::http::{self, client, constants::HttpError, request, url_parser::parse_url},
     task::task::sleep,
+    timer::tsc,
 };
 
 pub fn cmd_bench(args: &str) {
@@ -87,9 +87,9 @@ pub fn cmd_bench(args: &str) {
     kdebug!("connection established on port {}", ka_client.local_port);
 
     for _ in 0..num_requests {
-        let start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
+        let start = tsc::now_us();
         let res = ka_client.send(request.clone());
-        let delta = TICKS.load(core::sync::atomic::Ordering::Relaxed) - start;
+        let delta = tsc::now_us() - start;
         match res {
             Ok(_) => ka_response_time_vec.push(delta),
             Err(e) => match e {
@@ -128,13 +128,13 @@ pub fn cmd_bench(args: &str) {
     let mut pr_response_time_vec = Vec::<u64>::new();
 
     for _ in 0..num_requests {
-        let start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
+        let start = tsc::now_us();
         let mut pr_client =
             client::connection::new_with_ip(host.as_str(), resolved_ip, port, false);
         match pr_client.connect() {
             Ok(_) => {
                 let res = pr_client.send(request.clone());
-                let delta = TICKS.load(core::sync::atomic::Ordering::Relaxed) - start;
+                let delta = tsc::now_us() - start;
                 pr_client.close();
                 sleep(50);
                 match res {
@@ -184,12 +184,12 @@ fn print_results(
         let avg = sum / times.len() as u64;
         let p95 = times[times.len() * 95 / 100];
         let p99 = times[times.len() * 99 / 100];
-        let req_s = times.len() as u64 * 1000 / sum;
-        println!("min:    {} ms", times.first().unwrap());
-        println!("max:    {} ms", times.last().unwrap());
-        println!("avg:    {} ms", avg);
-        println!("p95:    {} ms", p95);
-        println!("p99:    {} ms", p99);
+        let req_s = times.len() as u64 * 1_000_000 / sum;
+        println!("min:    {} us", times.first().unwrap());
+        println!("max:    {} us", times.last().unwrap());
+        println!("avg:    {} us", avg);
+        println!("p95:    {} us", p95);
+        println!("p99:    {} us", p99);
         println!("req/s:  {}", req_s);
     }
     println!(
