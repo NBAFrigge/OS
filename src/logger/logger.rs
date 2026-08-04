@@ -71,7 +71,7 @@ impl KernelLogger {
 }
 
 pub static LOGGER: KernelLogger = KernelLogger {
-    target_level: AtomicU8::new(LogLevel::Debug as u8),
+    target_level: AtomicU8::new(LogLevel::Info as u8),
 };
 
 #[macro_export]
