@@ -2,12 +2,14 @@ use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     sync::Arc,
 };
+use core::sync::atomic::{AtomicU64, Ordering};
 use lazy_static::lazy_static;
 
 use crate::sync::IrqMutex;
 
 use crate::{
     crypto::random::{generate_u16, generate_u32},
+    idt::interrupt::TICKS,
     kdebug, kinfo, ktrace, kwarn,
     net::{
         interface::NETWORK_INTERFACE,
@@ -17,6 +19,8 @@ use crate::{
         },
     },
 };
+
+pub static LAST_TX_SEGMENT_TICK: AtomicU64 = AtomicU64::new(0);
 
 use packet::flags;
 
@@ -319,6 +323,8 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                     socket.send_unacked = ack_num;
                     socket.retransmit_ticks = 0;
                     socket.cwnd = socket.cwnd.min(socket.max_queue_size as u32);
+
+                    try_send(&mut socket, &dst_ip);
                 }
             }
 
@@ -458,12 +464,10 @@ pub fn tcp_tick() {
                 }
 
                 TcpState::Established => {
-                    let sent = socket.sent_unacked_len();
-                    let unsent = socket.tx_queue.len().saturating_sub(sent);
-
                     if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
                         socket.retransmit_ticks = 0;
 
+                        let sent = socket.sent_unacked_len();
                         socket.ssthresh = (sent / 2).max(2 * MSS) as u32;
                         socket.cwnd = MSS as u32;
 
@@ -496,36 +500,7 @@ pub fn tcp_tick() {
                             &segment,
                         );
                     } else {
-                        if sent >= socket.cwnd as usize {
-                            continue;
-                        }
-
-                        let cwnd_usize = socket.cwnd as usize;
-                        let free_window_space = cwnd_usize.saturating_sub(sent);
-                        let to_send_new = unsent.min(MSS).min(free_window_space);
-
-                        if to_send_new > 0 {
-                            let segment: alloc::vec::Vec<u8> = socket
-                                .tx_queue
-                                .iter()
-                                .skip(sent)
-                                .take(to_send_new)
-                                .copied()
-                                .collect();
-
-                            send_segment(
-                                &src_ip,
-                                socket.tuple.remote_ip,
-                                socket.tuple.local_port,
-                                socket.tuple.remote_port,
-                                socket.local_seq,
-                                socket.remote_seq,
-                                flags::ACK | flags::PSH,
-                                &segment,
-                            );
-
-                            socket.local_seq = socket.local_seq.wrapping_add(to_send_new as u32);
-                        }
+                        try_send(&mut socket, &src_ip);
                     }
                 }
 
@@ -574,6 +549,45 @@ pub fn tcp_tick() {
         }
     }
 }
+
+pub fn try_send(socket: &mut TcpSocket, src_ip: &[u8; 4]) {
+    let sent = socket.sent_unacked_len();
+    if sent >= socket.cwnd as usize {
+        return;
+    }
+
+    let unsent = socket.tx_queue.len().saturating_sub(sent);
+    let free_window_space = (socket.cwnd as usize).saturating_sub(sent);
+    let to_send_new = unsent.min(MSS).min(free_window_space);
+
+    if to_send_new == 0 {
+        return;
+    }
+
+    let segment: alloc::vec::Vec<u8> = socket
+        .tx_queue
+        .iter()
+        .skip(sent)
+        .take(to_send_new)
+        .copied()
+        .collect();
+
+    LAST_TX_SEGMENT_TICK.store(TICKS.load(Ordering::Relaxed), Ordering::Relaxed);
+
+    send_segment(
+        src_ip,
+        socket.tuple.remote_ip,
+        socket.tuple.local_port,
+        socket.tuple.remote_port,
+        socket.local_seq,
+        socket.remote_seq,
+        flags::ACK | flags::PSH,
+        &segment,
+    );
+
+    socket.local_seq = socket.local_seq.wrapping_add(to_send_new as u32);
+}
+
 pub type SocketHandle = Arc<IrqMutex<TcpSocket>>;
 
 lazy_static! {
