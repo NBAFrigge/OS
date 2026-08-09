@@ -117,5 +117,18 @@ pub fn poll_network() {
             }
         }
     }
+    flush_tx()
+}
+
+pub fn flush_tx() {
+    if let Some(ref mut nic) = *E1000_DRIVER.lock() {
+        let mut interface = NETWORK_INTERFACE.lock();
+        while let Some(frame) = interface.tx_queue.pop_front() {
+            if !nic.send(&frame){
+                interface.tx_queue.push_front(frame);
+                break;
+            }
+        }
+    }
 }
 

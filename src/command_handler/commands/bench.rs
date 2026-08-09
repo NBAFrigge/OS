@@ -79,6 +79,8 @@ pub fn cmd_bench(args: &str) {
     let mut ka_err_dns = 0usize;
     let mut ka_err_socket = 0usize;
     let mut ka_response_time_vec = Vec::<u64>::new();
+    let mut ka_ttfb_vec = Vec::<u64>::new();
+    let mut ka_read_vec = Vec::<u64>::new();
 
     while !ka_client.is_open() {
         sleep(1);
@@ -91,7 +93,11 @@ pub fn cmd_bench(args: &str) {
         let res = ka_client.send(request.clone());
         let delta = tsc::now_us() - start;
         match res {
-            Ok(_) => ka_response_time_vec.push(delta),
+            Ok(_) => {
+                ka_response_time_vec.push(delta);
+                ka_ttfb_vec.push(client::LAST_TTFB_US.load(core::sync::atomic::Ordering::Relaxed));
+                ka_read_vec.push(client::LAST_READ_US.load(core::sync::atomic::Ordering::Relaxed));
+            }
             Err(e) => match e {
                 HttpError::Timeout => ka_err_timeout += 1,
                 HttpError::ConnectionFailed => ka_err_connection += 1,
@@ -115,6 +121,9 @@ pub fn cmd_bench(args: &str) {
         ka_err_dns,
         ka_err_socket,
     );
+    ka_ttfb_vec.sort();
+    ka_read_vec.sort();
+    print_split(&ka_ttfb_vec, &ka_read_vec);
 
     kdebug!("keep-alive done");
 
@@ -195,5 +204,21 @@ fn print_results(
     println!(
         "errors: timeout={} conn={} parse={} dns={} socket={}",
         err_timeout, err_connection, err_parse, err_dns, err_socket
+    );
+}
+
+fn print_split(ttfb: &[u64], read: &[u64]) {
+    if ttfb.is_empty() {
+        return;
+    }
+    let ttfb_avg = ttfb.iter().sum::<u64>() / ttfb.len() as u64;
+    let read_avg = read.iter().sum::<u64>() / read.len() as u64;
+    println!(
+        "split:  ttfb avg={} min={} p99={} us | read avg={} min={} us",
+        ttfb_avg,
+        ttfb.first().unwrap(),
+        ttfb[ttfb.len() * 99 / 100],
+        read_avg,
+        read.first().unwrap()
     );
 }

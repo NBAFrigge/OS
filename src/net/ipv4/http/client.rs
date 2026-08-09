@@ -3,28 +3,25 @@ use core::sync::atomic::Ordering;
 use x86_64::instructions::interrupts;
 
 use crate::{
-    idt::interrupt::TICKS,
-    kdebug, kerror,
-    net::{
-        interface::NETWORK_INTERFACE,
-        ipv4::{
+    idt::interrupt::TICKS, kdebug, kerror, net::{
+        dispatcher::flush_tx, interface::NETWORK_INTERFACE, ipv4::{
             http::{
                 constants::HttpError,
                 request::Request,
                 response::{parse_response, response},
-            },
-            transport::{
+            }, transport::{
                 tcp::socket::{
-                    self, try_send, TcpState, TcpTuple, LAST_TX_SEGMENT_TICK, TCP_SOCKET_MANAGER,
-                },
-                udp::{dhcp::packet::constants::DHCP_MAGIC_COOKIE, dns::solver::DnsResolver},
+                    self, LAST_TX_SEGMENT_TICK, TCP_SOCKET_MANAGER, TcpState, TcpTuple, try_send,
+                }, udp::{dhcp::packet::constants::DHCP_MAGIC_COOKIE, dns::solver::DnsResolver},
             },
         },
-    },
-    task::task::sleep,
+    }, task::task::sleep,
 };
 
 const CONN_TIMEOUT: u64 = 300;
+
+pub static LAST_TTFB_US: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+pub static LAST_READ_US: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 pub struct connection<'a> {
     host: &'a str,
@@ -75,6 +72,8 @@ impl<'a> connection<'a> {
                 .ok_or(HttpError::SocketNotFound)?
                 .clone()
         };
+
+        flush_tx();
 
         let t_start = TICKS.load(Ordering::Relaxed);
         loop {
@@ -150,20 +149,24 @@ impl<'a> connection<'a> {
             let mut s = socket.lock();
             s.write(&raw_request);
             try_send(&mut s, &src_ip);
+            flush_tx()
         }
 
+        let t_sent = crate::timer::tsc::now_us();
         let start_ticks = TICKS.load(Ordering::Relaxed);
 
         let mut raw_response = vec![0u8; 65536];
         let mut offset = 0;
         let mut header_lenght = 0;
         let mut first_byte_tick: u64 = 0;
+        let mut t_first_byte: u64 = 0;
         loop {
             interrupts::disable();
             let prev = offset;
             let n = socket.lock().read(&mut raw_response[offset..]);
             if n > 0 && first_byte_tick == 0 {
                 first_byte_tick = TICKS.load(Ordering::Relaxed);
+                t_first_byte = crate::timer::tsc::now_us();
             }
             offset += n;
             if n == 0 {
@@ -216,6 +219,10 @@ impl<'a> connection<'a> {
             }
         }
         let resp = parse_response(&raw_response[..offset]).ok_or(HttpError::ParseError)?;
+
+        let t_done = crate::timer::tsc::now_us();
+        LAST_TTFB_US.store(t_first_byte.saturating_sub(t_sent), Ordering::Relaxed);
+        LAST_READ_US.store(t_done.saturating_sub(t_first_byte), Ordering::Relaxed);
 
         if !keep_alive && !self.force_keep_alive {
             socket.lock().close();
