@@ -24,7 +24,8 @@ impl Datetime {
     }
 
     pub fn now(&self) -> u64 {
-        self.timestmap + TICKS.load(core::sync::atomic::Ordering::Relaxed) / 1000
+        self.timestmap
+            + TICKS.load(core::sync::atomic::Ordering::Relaxed) / 1000
     }
 
     pub fn date(&self) -> FormattedTime {
@@ -37,7 +38,8 @@ impl Datetime {
         let mut year = 1970;
 
         loop {
-            let is_leap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+            let is_leap =
+                (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
             let days_in_year = if is_leap { 366 } else { 365 };
             if days < days_in_year {
                 break;
@@ -87,7 +89,12 @@ impl fmt::Display for FormattedTime {
         write!(
             f,
             "{:02}/{:02}/{} {:02}:{:02}:{:02}",
-            self.day, self.month, self.year, self.hour, self.minute, self.second
+            self.day,
+            self.month,
+            self.year,
+            self.hour,
+            self.minute,
+            self.second
         )
     }
 }

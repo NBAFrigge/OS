@@ -1,9 +1,9 @@
+use crate::sync::IrqMutex;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use crate::sync::IrqMutex;
 
 use crate::net::interface::NETWORK_INTERFACE;
 use crate::net::ipv4;
@@ -66,7 +66,11 @@ pub fn create_socket(port: u16) -> Arc<IrqMutex<UdpSocket>> {
     Arc::new(IrqMutex::new(UdpSocket::new(port)))
 }
 
-pub fn handle_udp_packet(src_ip: &[u8; 4], dst_ip: &[u8; 4], raw_packet: &[u8]) {
+pub fn handle_udp_packet(
+    src_ip: &[u8; 4],
+    dst_ip: &[u8; 4],
+    raw_packet: &[u8],
+) {
     if raw_packet.len() < 8 {
         ktrace!("Udp packet too short");
         return;
@@ -80,7 +84,9 @@ pub fn handle_udp_packet(src_ip: &[u8; 4], dst_ip: &[u8; 4], raw_packet: &[u8]) 
 
     let checksum = header.checksum;
     let dst_port = header.dst_port;
-    if checksum != 0 && checksum != header.calculate_checksum(src_ip, dst_ip, payload) {
+    if checksum != 0
+        && checksum != header.calculate_checksum(src_ip, dst_ip, payload)
+    {
         kwarn!("UDP: checksum mismatch on port {}, dropping", dst_port);
         return;
     }
@@ -93,7 +99,11 @@ pub fn handle_udp_packet(src_ip: &[u8; 4], dst_ip: &[u8; 4], raw_packet: &[u8]) 
         let mut socket = socket_handle.lock();
 
         if socket.rx_queue.len() < socket.max_queue_size {
-            kdebug!("UDP: received {} bytes on port {}", payload.len(), dst_port);
+            kdebug!(
+                "UDP: received {} bytes on port {}",
+                payload.len(),
+                dst_port
+            );
             socket.rx_queue.push_back(packet_data);
         } else {
             kwarn!("UDP: rx queue full on port {}, dropping", dst_port);

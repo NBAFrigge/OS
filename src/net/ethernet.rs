@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use crate::kwarn;
+use alloc::vec::Vec;
 
 pub struct EthernetPacket<'a> {
     pub dst_mac: [u8; 6],
@@ -27,7 +27,12 @@ pub fn parse(frame: &[u8]) -> Option<EthernetPacket> {
     })
 }
 
-pub fn build(dst_mac: [u8; 6], src_mac: [u8; 6], ether_type: u16, payload: &[u8]) -> Vec<u8> {
+pub fn build(
+    dst_mac: [u8; 6],
+    src_mac: [u8; 6],
+    ether_type: u16,
+    payload: &[u8],
+) -> Vec<u8> {
     let mut frame = Vec::new();
     frame.extend_from_slice(&dst_mac);
     frame.extend_from_slice(&src_mac);

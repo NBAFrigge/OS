@@ -1,6 +1,6 @@
+use crate::kinfo;
 use bootloader::bootinfo;
 use core::sync::atomic::{AtomicU64, Ordering};
-use crate::kinfo;
 use x86_64::{
     structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags},
     PhysAddr, VirtAddr,
@@ -19,7 +19,8 @@ pub fn init(memory_map: &'static bootinfo::MemoryMap, offset: u64) {
     *FRAME_ALLOCATOR.lock() = Some(info_frame_allocator);
 
     if let Some(ref mut allocator) = *FRAME_ALLOCATOR.lock() {
-        heap::init(&mut offset_page_table, allocator).expect("heap initialization failed");
+        heap::init(&mut offset_page_table, allocator)
+            .expect("heap initialization failed");
     }
 
     kinfo!("Memory and Heap initialized successfully");

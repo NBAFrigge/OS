@@ -48,7 +48,10 @@ impl DnsHeader {
 
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
-            core::slice::from_raw_parts(self as *const _ as *const u8, core::mem::size_of::<Self>())
+            core::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                core::mem::size_of::<Self>(),
+            )
         }
     }
 
@@ -97,8 +100,12 @@ impl<'a> DnsQuestion<'a> {
         buffer[pos] = 0;
         pos += 1;
 
-        let footer_bytes =
-            unsafe { core::slice::from_raw_parts(&self.footer as *const _ as *const u8, 4) };
+        let footer_bytes = unsafe {
+            core::slice::from_raw_parts(
+                &self.footer as *const _ as *const u8,
+                4,
+            )
+        };
         buffer[pos..pos + 4].copy_from_slice(footer_bytes);
         pos + 4
     }
@@ -138,8 +145,11 @@ impl<'a> DnsResourceRecord<'a> {
         if pos + 10 > packet.len() {
             return None;
         }
-        let header =
-            unsafe { core::ptr::read(packet.as_ptr().add(pos) as *const DnsResourceRecordHeader) };
+        let header = unsafe {
+            core::ptr::read(
+                packet.as_ptr().add(pos) as *const DnsResourceRecordHeader
+            )
+        };
         pos += 10;
 
         let rdlength = u16::from_be(header.rdlength) as usize;

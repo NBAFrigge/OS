@@ -65,10 +65,12 @@ impl Writer {
             self.new_line();
         }
 
-        self.buffer.chars[self.row_position][self.column_position].write(ScreenChar {
-            ascii_character: byte,
-            color_code: self.color_code,
-        });
+        self.buffer.chars[self.row_position][self.column_position].write(
+            ScreenChar {
+                ascii_character: byte,
+                color_code: self.color_code,
+            },
+        );
 
         self.column_position += 1;
         self.update_cursor();
@@ -105,7 +107,8 @@ impl Writer {
                 ascii_character: b' ',
                 color_code: self.color_code,
             };
-            self.buffer.chars[self.row_position][self.column_position].write(blank);
+            self.buffer.chars[self.row_position][self.column_position]
+                .write(blank);
 
             self.update_cursor();
         }
@@ -175,10 +178,12 @@ impl Writer {
             return;
         }
 
-        self.buffer.chars[self.row_position][self.column_position].write(ScreenChar {
-            ascii_character: byte,
-            color_code: self.color_code,
-        });
+        self.buffer.chars[self.row_position][self.column_position].write(
+            ScreenChar {
+                ascii_character: byte,
+                color_code: self.color_code,
+            },
+        );
         self.column_position += 1;
     }
     fn update_cursor(&mut self) {
@@ -189,8 +194,10 @@ impl Writer {
         }
 
         unsafe {
-            let mut addr_port = x86_64::instructions::port::Port::<u8>::new(0x3D4);
-            let mut data_port = x86_64::instructions::port::Port::<u8>::new(0x3D5);
+            let mut addr_port =
+                x86_64::instructions::port::Port::<u8>::new(0x3D4);
+            let mut data_port =
+                x86_64::instructions::port::Port::<u8>::new(0x3D5);
 
             addr_port.write(0x0E);
             data_port.write((pos >> 8) as u8);

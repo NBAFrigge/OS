@@ -57,7 +57,9 @@ impl ArpPacket {
             return None;
         }
 
-        let packet = unsafe { core::ptr::read_unaligned(data.as_ptr() as *const ArpPacket) };
+        let packet = unsafe {
+            core::ptr::read_unaligned(data.as_ptr() as *const ArpPacket)
+        };
 
         Some(Self {
             hardware_type: u16::from_be(packet.hardware_type),

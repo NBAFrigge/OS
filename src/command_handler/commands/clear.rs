@@ -7,4 +7,3 @@ pub fn cmd_clear(_args: &str) {
         writer.redraw_shell_line();
     });
 }
-

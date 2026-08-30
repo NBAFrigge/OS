@@ -105,7 +105,9 @@ impl Madt {
 
     pub fn entries(&self) -> MadtIterator {
         let start_ptr = unsafe { (self as *const _ as *const u8).add(44) };
-        let end_ptr = unsafe { (self as *const _ as *const u8).add(self.length as usize) };
+        let end_ptr = unsafe {
+            (self as *const _ as *const u8).add(self.length as usize)
+        };
 
         MadtIterator {
             ptr: start_ptr,

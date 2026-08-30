@@ -4,8 +4,8 @@ use crate::net::{
     interface::NETWORK_INTERFACE,
     ipv4::transport::udp::{
         dhcp::packet::constants::{
-            DHCP_MAGIC_COOKIE, FLAGS_BROADCAST, HLEN_ETHERNET, HTYPE_ETHERNET, OPT_END, OPT_PAD,
-            OP_BOOTREQUEST,
+            DHCP_MAGIC_COOKIE, FLAGS_BROADCAST, HLEN_ETHERNET, HTYPE_ETHERNET,
+            OPT_END, OPT_PAD, OP_BOOTREQUEST,
         },
         packet,
     },
@@ -147,7 +147,11 @@ impl DhcpPacket {
         }
     }
 
-    pub fn new_request(xid: u32, requested_ip: &[u8; 4], server_ip: &[u8; 4]) -> Self {
+    pub fn new_request(
+        xid: u32,
+        requested_ip: &[u8; 4],
+        server_ip: &[u8; 4],
+    ) -> Self {
         let mut options = [0u8; 308];
         let mut cursor = 0;
 

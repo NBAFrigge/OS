@@ -54,7 +54,12 @@ impl UdpHeader {
         }
     }
 
-    pub fn calculate_checksum(&self, src_ip: &[u8; 4], dst_ip: &[u8; 4], payload: &[u8]) -> u16 {
+    pub fn calculate_checksum(
+        &self,
+        src_ip: &[u8; 4],
+        dst_ip: &[u8; 4],
+        payload: &[u8],
+    ) -> u16 {
         let mut sum: u32 = 0;
 
         for i in (0..4).step_by(2) {
@@ -87,7 +92,12 @@ impl UdpHeader {
         final_checksum
     }
 
-    pub fn serialize(&mut self, src_ip: &[u8; 4], dst_ip: &[u8; 4], payload: &[u8]) -> [u8; 8] {
+    pub fn serialize(
+        &mut self,
+        src_ip: &[u8; 4],
+        dst_ip: &[u8; 4],
+        payload: &[u8],
+    ) -> [u8; 8] {
         self.length = (8 + payload.len()) as u16;
         self.checksum = 0;
         self.checksum = self.calculate_checksum(src_ip, dst_ip, payload);

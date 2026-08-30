@@ -31,7 +31,12 @@ fn get_dns_port() -> u16 {
         return port;
     }
     let new_port = 49152 + (generate_u16() % 16384);
-    match DNS_PORT.compare_exchange(0, new_port, Ordering::Relaxed, Ordering::Relaxed) {
+    match DNS_PORT.compare_exchange(
+        0,
+        new_port,
+        Ordering::Relaxed,
+        Ordering::Relaxed,
+    ) {
         Ok(_) => new_port,
         Err(existing) => existing,
     }
@@ -146,7 +151,9 @@ fn wait_for_response(domain: &str, id: u16) -> Option<[u8; 4]> {
             let mut pos = skip_question_section(&payload);
 
             for _ in 0..ancount {
-                let Some((record, next_pos)) = DnsResourceRecord::parse(&payload, pos) else {
+                let Some((record, next_pos)) =
+                    DnsResourceRecord::parse(&payload, pos)
+                else {
                     break;
                 };
                 let rtype = u16::from_be(record.header.rtype);
@@ -164,7 +171,8 @@ fn wait_for_response(domain: &str, id: u16) -> Option<[u8; 4]> {
                         domain.to_string(),
                         DnsCacheEntry {
                             ip,
-                            expiration_tick: ttl + TICKS.load(Ordering::Relaxed) as u32,
+                            expiration_tick: ttl
+                                + TICKS.load(Ordering::Relaxed) as u32,
                         },
                     );
                     return Some(ip);
@@ -195,7 +203,8 @@ fn skip_question_section(payload: &[u8]) -> usize {
     pos
 }
 
-fn get_socket() -> alloc::sync::Arc<crate::sync::IrqMutex<udp::socket::UdpSocket>> {
+fn get_socket(
+) -> alloc::sync::Arc<crate::sync::IrqMutex<udp::socket::UdpSocket>> {
     let port = get_dns_port();
     loop {
         let manager = UDP_SOCKET_MANAGER.lock();

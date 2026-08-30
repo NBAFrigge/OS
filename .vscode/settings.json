@@ -1,5 +1,9 @@
 {
   "rust-analyzer.cargo.target": "os.json",
-  "rust-analyzer.checkOnSave.allTargets": false,
-  "rust-analyzer.cargo.checkOnSave.target": "os.json"
+  "rust-analyzer.cargo.allTargets": false,
+  "rust-analyzer.check.allTargets": false,
+  "rust-analyzer.check.targets": "os.json",
+  "rust-analyzer.cargo.buildScripts.enable": true,
+  "rust-analyzer.cargo.extraEnv": { "CARGO_UNSTABLE_JSON_TARGET_SPEC": "true" },
+  "rust-analyzer.files.excludeDirs": ["benchmarks", "target"]
 }

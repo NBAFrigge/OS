@@ -3,25 +3,38 @@ use core::sync::atomic::Ordering;
 use x86_64::instructions::interrupts;
 
 use crate::{
-    idt::interrupt::TICKS, kdebug, kerror, net::{
-        dispatcher::flush_tx, interface::NETWORK_INTERFACE, ipv4::{
+    idt::interrupt::TICKS,
+    kdebug, kerror,
+    net::{
+        dispatcher::flush_tx,
+        interface::NETWORK_INTERFACE,
+        ipv4::{
             http::{
                 constants::HttpError,
                 request::Request,
                 response::{parse_response, response},
-            }, transport::{
+            },
+            transport::{
                 tcp::socket::{
-                    self, LAST_TX_SEGMENT_TICK, TCP_SOCKET_MANAGER, TcpState, TcpTuple, try_send,
-                }, udp::{dhcp::packet::constants::DHCP_MAGIC_COOKIE, dns::solver::DnsResolver},
+                    self, try_send, TcpState, TcpTuple, LAST_TX_SEGMENT_TICK,
+                    TCP_SOCKET_MANAGER,
+                },
+                udp::{
+                    dhcp::packet::constants::DHCP_MAGIC_COOKIE,
+                    dns::solver::DnsResolver,
+                },
             },
         },
-    }, task::task::sleep,
+    },
+    task::task::sleep,
 };
 
 const CONN_TIMEOUT: u64 = 300;
 
-pub static LAST_TTFB_US: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
-pub static LAST_READ_US: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+pub static LAST_TTFB_US: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+pub static LAST_READ_US: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
 
 pub struct connection<'a> {
     host: &'a str,
@@ -32,7 +45,11 @@ pub struct connection<'a> {
 }
 
 impl<'a> connection<'a> {
-    pub fn new(host: &'a str, port: u16, force_ka: bool) -> Result<Self, HttpError> {
+    pub fn new(
+        host: &'a str,
+        port: u16,
+        force_ka: bool,
+    ) -> Result<Self, HttpError> {
         let ip = resolve_target(host).ok_or(HttpError::DnsError)?;
         Ok(Self {
             host,
@@ -43,7 +60,12 @@ impl<'a> connection<'a> {
         })
     }
 
-    pub fn new_with_ip(host: &'a str, ip: [u8; 4], port: u16, force_ka: bool) -> Self {
+    pub fn new_with_ip(
+        host: &'a str,
+        ip: [u8; 4],
+        port: u16,
+        force_ka: bool,
+    ) -> Self {
         Self {
             host,
             remote_ip: ip,
@@ -174,7 +196,9 @@ impl<'a> connection<'a> {
             } else {
                 interrupts::enable();
             }
-            if (TICKS.load(Ordering::Relaxed) - start_ticks) as usize > request.timeout {
+            if (TICKS.load(Ordering::Relaxed) - start_ticks) as usize
+                > request.timeout
+            {
                 kdebug!("HTTP: request timeout");
                 return Err(HttpError::Timeout);
             }
@@ -188,15 +212,17 @@ impl<'a> connection<'a> {
             }
         }
 
-        let header_string = core::str::from_utf8(&raw_response[..header_lenght])
-            .map_err(|_| HttpError::ParseError)?;
+        let header_string =
+            core::str::from_utf8(&raw_response[..header_lenght])
+                .map_err(|_| HttpError::ParseError)?;
 
         let mut content_lenght = 0;
         let mut keep_alive = false;
 
         for s in header_string.split("\r\n") {
             if s.contains("Content-Length") {
-                let splitted = s.split_once(":").ok_or(HttpError::ParseError)?;
+                let splitted =
+                    s.split_once(":").ok_or(HttpError::ParseError)?;
                 content_lenght = splitted
                     .1
                     .trim()
@@ -206,23 +232,29 @@ impl<'a> connection<'a> {
             }
 
             if s.contains("Connection") {
-                let splitted = s.split_once(":").ok_or(HttpError::ParseError)?;
+                let splitted =
+                    s.split_once(":").ok_or(HttpError::ParseError)?;
                 keep_alive = splitted.1.trim() == "keep-alive";
             }
         }
 
         while offset < content_lenght + header_lenght {
             offset += socket.lock().read(&mut raw_response[offset..]);
-            if (TICKS.load(Ordering::Relaxed) - start_ticks) as usize > request.timeout {
+            if (TICKS.load(Ordering::Relaxed) - start_ticks) as usize
+                > request.timeout
+            {
                 kdebug!("HTTP: request timeout");
                 return Err(HttpError::Timeout);
             }
         }
-        let resp = parse_response(&raw_response[..offset]).ok_or(HttpError::ParseError)?;
+        let resp = parse_response(&raw_response[..offset])
+            .ok_or(HttpError::ParseError)?;
 
         let t_done = crate::timer::tsc::now_us();
-        LAST_TTFB_US.store(t_first_byte.saturating_sub(t_sent), Ordering::Relaxed);
-        LAST_READ_US.store(t_done.saturating_sub(t_first_byte), Ordering::Relaxed);
+        LAST_TTFB_US
+            .store(t_first_byte.saturating_sub(t_sent), Ordering::Relaxed);
+        LAST_READ_US
+            .store(t_done.saturating_sub(t_first_byte), Ordering::Relaxed);
 
         if !keep_alive && !self.force_keep_alive {
             socket.lock().close();

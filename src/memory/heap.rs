@@ -1,6 +1,7 @@
 use x86_64::{
     structures::paging::{
-        mapper::MapToError, FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
+        mapper::MapToError, FrameAllocator, Mapper, OffsetPageTable, Page,
+        PageTableFlags, Size4KiB,
     },
     VirtAddr,
 };
@@ -19,8 +20,10 @@ pub fn init(
     info_frame_allocator: &mut BootInfoFrameAllocator,
 ) -> Result<(), MapToError<Size4KiB>> {
     let page_range = {
-        let heap_start_page = Page::<Size4KiB>::containing_address(VirtAddr::new(HEAP_START));
-        let heap_end_page = Page::<Size4KiB>::containing_address(VirtAddr::new(HEAP_END));
+        let heap_start_page =
+            Page::<Size4KiB>::containing_address(VirtAddr::new(HEAP_START));
+        let heap_end_page =
+            Page::<Size4KiB>::containing_address(VirtAddr::new(HEAP_END));
         Page::range_inclusive(heap_start_page, heap_end_page)
     };
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;

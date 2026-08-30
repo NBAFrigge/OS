@@ -34,7 +34,8 @@ impl IcmpPacket {
 
         let mut packet_data = Vec::with_capacity(8 + payload.len());
         let header_ptr = &header as *const Self as *const u8;
-        let header_slice = unsafe { core::slice::from_raw_parts(header_ptr, 8) };
+        let header_slice =
+            unsafe { core::slice::from_raw_parts(header_ptr, 8) };
 
         packet_data.extend_from_slice(header_slice);
         packet_data.extend_from_slice(payload);
@@ -59,7 +60,8 @@ impl IcmpPacket {
         if data.len() < core::mem::size_of::<IcmpPacket>() {
             return None;
         }
-        let packet = unsafe { read_unaligned(data.as_ptr() as *const IcmpPacket) };
+        let packet =
+            unsafe { read_unaligned(data.as_ptr() as *const IcmpPacket) };
         Some(Self {
             typ: packet.typ,
             code: packet.code,

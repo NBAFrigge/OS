@@ -93,8 +93,9 @@ pub fn sleep(ms: u64) {
 
         if let Some(task) = manager.current_task.as_mut() {
             task.state = State::Waiting;
-            task.wake_on_tick =
-                crate::idt::interrupt::TICKS.load(core::sync::atomic::Ordering::Relaxed) + ms;
+            task.wake_on_tick = crate::idt::interrupt::TICKS
+                .load(core::sync::atomic::Ordering::Relaxed)
+                + ms;
         }
     });
 

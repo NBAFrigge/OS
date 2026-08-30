@@ -87,7 +87,9 @@ pub extern "C" fn shell_task() -> ! {
         let on_close = without_interrupts(|| SHELL.lock().on_close);
 
         if let Some(tick_fn) = tick {
-            if tick_fn() == HandlerResult::Done || CTRL_C_PRESSED.load(Ordering::Relaxed) {
+            if tick_fn() == HandlerResult::Done
+                || CTRL_C_PRESSED.load(Ordering::Relaxed)
+            {
                 kdebug!("nc: exit signal recieved");
                 CTRL_C_PRESSED.store(false, Ordering::Relaxed);
                 without_interrupts(|| {
@@ -105,8 +107,9 @@ pub extern "C" fn shell_task() -> ! {
             }
         }
 
-        let cmd =
-            x86_64::instructions::interrupts::without_interrupts(|| PENDING_COMMAND.lock().take());
+        let cmd = x86_64::instructions::interrupts::without_interrupts(|| {
+            PENDING_COMMAND.lock().take()
+        });
 
         if let Some(cmd) = cmd {
             if !cmd.trim().is_empty() {
@@ -137,5 +140,6 @@ pub extern "C" fn shell_task() -> ! {
 
 lazy_static! {
     pub static ref SHELL: IrqMutex<Shell> = IrqMutex::new(Shell::new());
-    pub static ref PENDING_COMMAND: IrqMutex<Option<String>> = IrqMutex::new(None);
+    pub static ref PENDING_COMMAND: IrqMutex<Option<String>> =
+        IrqMutex::new(None);
 }

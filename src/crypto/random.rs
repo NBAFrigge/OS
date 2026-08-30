@@ -39,7 +39,8 @@ impl EntropyPool {
 }
 
 lazy_static! {
-    pub static ref GLOBAL_ENTROPY: Mutex<EntropyPool> = Mutex::new(EntropyPool::new());
+    pub static ref GLOBAL_ENTROPY: Mutex<EntropyPool> =
+        Mutex::new(EntropyPool::new());
 }
 
 fn xor_shift() -> u64 {

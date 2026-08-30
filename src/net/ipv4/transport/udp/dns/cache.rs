@@ -34,5 +34,6 @@ pub fn get_from_cache(domain: &str) -> Option<[u8; 4]> {
 }
 
 lazy_static! {
-    pub static ref DNS_CACHE: Mutex<BTreeMap<String, DnsCacheEntry>> = Mutex::new(BTreeMap::new());
+    pub static ref DNS_CACHE: Mutex<BTreeMap<String, DnsCacheEntry>> =
+        Mutex::new(BTreeMap::new());
 }

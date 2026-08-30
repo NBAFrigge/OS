@@ -101,7 +101,8 @@ pub fn handle_packet(arp_packet: ArpPacket) {
     } else if arp_packet.operation == arp_struct::ArpOperation::Reply as u16 {
         let ip = arp_packet.sender_proto_addr;
         kdebug!(
-            "ARP: resolved {}.{}.{}.{} -> {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            "ARP: resolved {}.{}.{}.{} -> \
+             {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             ip[0],
             ip[1],
             ip[2],

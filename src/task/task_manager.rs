@@ -43,7 +43,8 @@ impl TaskManager {
 
             if next_task.state == task::State::Waiting
                 && next_task.wake_on_tick > 0
-                && next_task.wake_on_tick <= TICKS.load(core::sync::atomic::Ordering::Relaxed)
+                && next_task.wake_on_tick
+                    <= TICKS.load(core::sync::atomic::Ordering::Relaxed)
             {
                 next_task.wake_on_tick = 0;
                 next_task.state = task::State::Ready;
@@ -73,7 +74,11 @@ impl TaskManager {
         match idle_index {
             Some(index) => {
                 if self.current_task.as_ref().unwrap().id == 0 {
-                    return self.current_task.as_ref().unwrap().saved_stack_pointer;
+                    return self
+                        .current_task
+                        .as_ref()
+                        .unwrap()
+                        .saved_stack_pointer;
                 }
 
                 let mut idle_task = self.task_list.remove(index).unwrap();

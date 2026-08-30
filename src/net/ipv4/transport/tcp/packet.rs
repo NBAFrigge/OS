@@ -24,7 +24,13 @@ pub mod flags {
 }
 
 impl TcpHeader {
-    pub fn new(src_port: u16, dst_port: u16, seq: u32, ack: u32, tcp_flags: u8) -> Self {
+    pub fn new(
+        src_port: u16,
+        dst_port: u16,
+        seq: u32,
+        ack: u32,
+        tcp_flags: u8,
+    ) -> Self {
         Self {
             src_port: src_port.to_be(),
             dst_port: dst_port.to_be(),
@@ -61,7 +67,8 @@ impl TcpHeader {
 
         let header_bytes = self.as_bytes();
         for i in (0..header_bytes.len()).step_by(2) {
-            let word = u16::from_be_bytes([header_bytes[i], header_bytes[i + 1]]);
+            let word =
+                u16::from_be_bytes([header_bytes[i], header_bytes[i + 1]]);
             sum += word as u32;
         }
 
@@ -71,7 +78,8 @@ impl TcpHeader {
         }
 
         if (payload.len() & 1) == 1 {
-            let last_byte_word = u16::from_be_bytes([payload[payload.len() - 1], 0]);
+            let last_byte_word =
+                u16::from_be_bytes([payload[payload.len() - 1], 0]);
             sum += last_byte_word as u32;
         }
 
@@ -83,7 +91,12 @@ impl TcpHeader {
         self.checksum
     }
 
-    pub fn verify_checksum(&self, src_ip: &[u8; 4], dst_ip: &[u8; 4], payload: &[u8]) -> bool {
+    pub fn verify_checksum(
+        &self,
+        src_ip: &[u8; 4],
+        dst_ip: &[u8; 4],
+        payload: &[u8],
+    ) -> bool {
         let mut sum: u32 = 0;
 
         sum += u16::from_be_bytes([src_ip[0], src_ip[1]]) as u32;
@@ -99,7 +112,8 @@ impl TcpHeader {
 
         let header_bytes = self.as_bytes();
         for i in (0..header_bytes.len()).step_by(2) {
-            let word = u16::from_be_bytes([header_bytes[i], header_bytes[i + 1]]);
+            let word =
+                u16::from_be_bytes([header_bytes[i], header_bytes[i + 1]]);
             sum += word as u32;
         }
 
@@ -109,7 +123,8 @@ impl TcpHeader {
         }
 
         if (payload.len() & 1) == 1 {
-            let last_byte_word = u16::from_be_bytes([payload[payload.len() - 1], 0]);
+            let last_byte_word =
+                u16::from_be_bytes([payload[payload.len() - 1], 0]);
             sum += last_byte_word as u32;
         }
 
@@ -121,7 +136,11 @@ impl TcpHeader {
     }
 }
 
-pub fn verify_segment_checksum(src_ip: &[u8; 4], dst_ip: &[u8; 4], tcp_segment: &[u8]) -> bool {
+pub fn verify_segment_checksum(
+    src_ip: &[u8; 4],
+    dst_ip: &[u8; 4],
+    tcp_segment: &[u8],
+) -> bool {
     let mut sum: u32 = 0;
 
     sum += u16::from_be_bytes([src_ip[0], src_ip[1]]) as u32;
@@ -135,7 +154,8 @@ pub fn verify_segment_checksum(src_ip: &[u8; 4], dst_ip: &[u8; 4], tcp_segment: 
         sum += u16::from_be_bytes([tcp_segment[i], tcp_segment[i + 1]]) as u32;
     }
     if (tcp_segment.len() & 1) == 1 {
-        sum += u16::from_be_bytes([tcp_segment[tcp_segment.len() - 1], 0]) as u32;
+        sum +=
+            u16::from_be_bytes([tcp_segment[tcp_segment.len() - 1], 0]) as u32;
     }
 
     while (sum >> 16) != 0 {

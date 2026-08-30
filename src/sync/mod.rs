@@ -12,7 +12,9 @@ pub struct IrqMutexGuard<'a, T> {
 
 impl<T> IrqMutex<T> {
     pub const fn new(val: T) -> Self {
-        IrqMutex { inner: spin::Mutex::new(val) }
+        IrqMutex {
+            inner: spin::Mutex::new(val),
+        }
     }
 
     pub fn lock(&self) -> IrqMutexGuard<T> {

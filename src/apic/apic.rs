@@ -104,7 +104,8 @@ pub unsafe fn init(offset: u64) {
     let rsdt_phys = rsdp_scan(offset).expect("RSDP not found");
     let rsdt_ptr = (rsdt_phys + offset) as *const Rsdt;
 
-    let madt_v_addr = Rsdt::find_madt(rsdt_ptr, offset).expect("APIC table not found");
+    let madt_v_addr =
+        Rsdt::find_madt(rsdt_ptr, offset).expect("APIC table not found");
 
     let madt_table = madt::Madt::new(madt_v_addr);
 

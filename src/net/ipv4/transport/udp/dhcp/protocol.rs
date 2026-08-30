@@ -12,7 +12,10 @@ use crate::{
             dhcp::{
                 self,
                 packet::{
-                    constants::{DHCPACK, DHCPOFFER, OPT_MESSAGE_TYPE, OPT_SERVER_IDENTIFIER},
+                    constants::{
+                        DHCPACK, DHCPOFFER, OPT_MESSAGE_TYPE,
+                        OPT_SERVER_IDENTIFIER,
+                    },
                     DhcpPacket,
                 },
             },
@@ -22,7 +25,8 @@ use crate::{
     task::task::sleep,
 };
 
-fn get_socket() -> alloc::sync::Arc<crate::sync::IrqMutex<udp::socket::UdpSocket>> {
+fn get_socket(
+) -> alloc::sync::Arc<crate::sync::IrqMutex<udp::socket::UdpSocket>> {
     loop {
         let mut manager = UDP_SOCKET_MANAGER.lock();
         if let Some(socket_arc) = manager.get(&68).cloned() {
@@ -60,7 +64,9 @@ fn handle_offer(expected_xid: u32) -> Option<([u8; 4], [u8; 4])> {
                     if let Some(msg_type) = dhcp.get_option(OPT_MESSAGE_TYPE) {
                         if msg_type[0] == DHCPOFFER {
                             let offered_ip = dhcp.header.yiaddr;
-                            if let Some(server_id_bytes) = dhcp.get_option(OPT_SERVER_IDENTIFIER) {
+                            if let Some(server_id_bytes) =
+                                dhcp.get_option(OPT_SERVER_IDENTIFIER)
+                            {
                                 let server_ip = [
                                     server_id_bytes[0],
                                     server_id_bytes[1],
@@ -90,7 +96,9 @@ fn request(xid: u32, requested_ip: &[u8; 4], server_ip: &[u8; 4]) {
     socket.lock().send_to([255, 255, 255, 255], 67, data);
 }
 
-fn handle_ack(expected_xid: u32) -> Option<([u8; 4], [u8; 4], [u8; 4], [u8; 4])> {
+fn handle_ack(
+    expected_xid: u32,
+) -> Option<([u8; 4], [u8; 4], [u8; 4], [u8; 4])> {
     let socket = get_socket();
     let start_tick = TICKS.load(Ordering::Relaxed);
     let timeout_ticks = 5000;
@@ -116,7 +124,12 @@ fn handle_ack(expected_xid: u32) -> Option<([u8; 4], [u8; 4], [u8; 4], [u8; 4])>
                                 .map(|b| [b[0], b[1], b[2], b[3]])
                                 .unwrap_or([8, 8, 8, 8]);
 
-                            return Some((assigned_ip, subnet_mask, gateway, dns));
+                            return Some((
+                                assigned_ip,
+                                subnet_mask,
+                                gateway,
+                                dns,
+                            ));
                         }
                     }
                 }
@@ -150,7 +163,9 @@ pub fn dhcp_task() {
 
             request(xid, &requested_ip, &server_ip);
 
-            if let Some((assigned_ip, subnet_mask, gateway, dns)) = handle_ack(xid) {
+            if let Some((assigned_ip, subnet_mask, gateway, dns)) =
+                handle_ack(xid)
+            {
                 let mut interface = NETWORK_INTERFACE.lock();
                 interface.ip_addr = Some(assigned_ip);
                 interface.subnet_mask = Some(subnet_mask);

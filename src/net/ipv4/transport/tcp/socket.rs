@@ -15,7 +15,9 @@ use crate::{
         interface::NETWORK_INTERFACE,
         ipv4::{
             self,
-            transport::tcp::packet::{self, verify_segment_checksum, TcpHeader, PROTOCOL},
+            transport::tcp::packet::{
+                self, verify_segment_checksum, TcpHeader, PROTOCOL,
+            },
         },
     },
 };
@@ -220,7 +222,8 @@ pub fn connect(remote_ip: &[u8; 4], remote_port: u16) -> u16 {
         ssthresh: u32::MAX,
     };
 
-    let mut syn = packet::TcpHeader::new(local_port, remote_port, isn, 0, flags::SYN);
+    let mut syn =
+        packet::TcpHeader::new(local_port, remote_port, isn, 0, flags::SYN);
     syn.calculate_checksum(&src_ip, remote_ip, &[]);
 
     TCP_SOCKET_MANAGER
@@ -277,7 +280,9 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
 
     match socket.state {
         TcpState::SynSent => {
-            if (header.flags & (flags::SYN | flags::ACK)) != (flags::SYN | flags::ACK) {
+            if (header.flags & (flags::SYN | flags::ACK))
+                != (flags::SYN | flags::ACK)
+            {
                 kwarn!("TCP: expected SYN-ACK in SynSent, dropping");
                 return;
             }
@@ -294,7 +299,11 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                 flags::ACK,
             );
             ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
-            ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
+            ipv4::protocol::send(
+                socket.tuple.remote_ip,
+                PROTOCOL,
+                ack.as_bytes(),
+            );
 
             kdebug!(
                 "TCP: connection established port {} ← {}.{}.{}.{}:{}",
@@ -310,7 +319,8 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
 
         TcpState::Established => {
             if (header.flags & flags::ACK) != 0 {
-                let bytes_acked = ack_num.wrapping_sub(socket.send_unacked) as usize;
+                let bytes_acked =
+                    ack_num.wrapping_sub(socket.send_unacked) as usize;
                 if bytes_acked > 0 && bytes_acked <= socket.sent_unacked_len() {
                     for _ in 0..bytes_acked {
                         socket.tx_queue.pop_front();
@@ -318,7 +328,8 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                     if socket.cwnd < socket.ssthresh {
                         socket.cwnd += MSS as u32;
                     } else {
-                        socket.cwnd = socket.cwnd + (MSS * MSS) as u32 / socket.cwnd
+                        socket.cwnd =
+                            socket.cwnd + (MSS * MSS) as u32 / socket.cwnd
                     }
                     socket.send_unacked = ack_num;
                     socket.retransmit_ticks = 0;
@@ -331,7 +342,8 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
             let mut invia_ack_dati = false;
             if !payload.is_empty() {
                 socket.rx_queue.extend(payload.iter().copied());
-                socket.remote_seq = socket.remote_seq.wrapping_add(payload.len() as u32);
+                socket.remote_seq =
+                    socket.remote_seq.wrapping_add(payload.len() as u32);
                 invia_ack_dati = true;
             }
 
@@ -347,8 +359,16 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                     socket.remote_seq,
                     flags::ACK,
                 );
-                ack_packet.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
-                ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack_packet.as_bytes());
+                ack_packet.calculate_checksum(
+                    &dst_ip,
+                    &socket.tuple.remote_ip,
+                    &[],
+                );
+                ipv4::protocol::send(
+                    socket.tuple.remote_ip,
+                    PROTOCOL,
+                    ack_packet.as_bytes(),
+                );
             } else if invia_ack_dati {
                 let mut ack = TcpHeader::new(
                     socket.tuple.local_port,
@@ -358,7 +378,11 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                     flags::ACK,
                 );
                 ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
-                ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
+                ipv4::protocol::send(
+                    socket.tuple.remote_ip,
+                    PROTOCOL,
+                    ack.as_bytes(),
+                );
             }
         }
 
@@ -373,8 +397,16 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                         socket.remote_seq,
                         flags::ACK,
                     );
-                    ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
-                    ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
+                    ack.calculate_checksum(
+                        &dst_ip,
+                        &socket.tuple.remote_ip,
+                        &[],
+                    );
+                    ipv4::protocol::send(
+                        socket.tuple.remote_ip,
+                        PROTOCOL,
+                        ack.as_bytes(),
+                    );
                     socket.state = TcpState::Closed;
                 } else {
                     socket.state = TcpState::FinWait2;
@@ -394,14 +426,19 @@ pub fn handle_tcp_packet(src_ip: &[u8; 4], raw_packet: &[u8]) {
                     flags::ACK,
                 );
                 ack.calculate_checksum(&dst_ip, &socket.tuple.remote_ip, &[]);
-                ipv4::protocol::send(socket.tuple.remote_ip, PROTOCOL, ack.as_bytes());
+                ipv4::protocol::send(
+                    socket.tuple.remote_ip,
+                    PROTOCOL,
+                    ack.as_bytes(),
+                );
 
                 socket.state = TcpState::Closed;
             }
         }
 
         TcpState::LastAck => {
-            let bytes_acked = ack_num.wrapping_sub(socket.send_unacked) as usize;
+            let bytes_acked =
+                ack_num.wrapping_sub(socket.send_unacked) as usize;
             if (header.flags & flags::ACK) != 0
                 && bytes_acked > 0
                 && bytes_acked <= socket.sent_unacked_len()
@@ -434,7 +471,8 @@ pub fn tcp_tick() {
         for (tuple, socket_handle) in manager.iter() {
             let mut socket = socket_handle.lock();
 
-            let closing = socket.state == TcpState::FinWait1 || socket.state == TcpState::LastAck;
+            let closing = socket.state == TcpState::FinWait1
+                || socket.state == TcpState::LastAck;
             if socket.sent_unacked_len() > 0 || closing {
                 socket.retransmit_ticks += 1;
             } else {
@@ -507,7 +545,10 @@ pub fn tcp_tick() {
                 TcpState::FinWait1 | TcpState::LastAck => {
                     if socket.retransmit_ticks >= DATA_RETRANSMIT_INTERVAL {
                         socket.retransmit_ticks = 0;
-                        kdebug!("TCP: retransmitting FIN in state {:?}", socket.state);
+                        kdebug!(
+                            "TCP: retransmitting FIN in state {:?}",
+                            socket.state
+                        );
 
                         let fin_seq = socket.local_seq.wrapping_sub(1);
 
@@ -572,7 +613,8 @@ pub fn try_send(socket: &mut TcpSocket, src_ip: &[u8; 4]) {
         .copied()
         .collect();
 
-    LAST_TX_SEGMENT_TICK.store(TICKS.load(Ordering::Relaxed), Ordering::Relaxed);
+    LAST_TX_SEGMENT_TICK
+        .store(TICKS.load(Ordering::Relaxed), Ordering::Relaxed);
 
     send_segment(
         src_ip,

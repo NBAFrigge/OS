@@ -1,10 +1,10 @@
 pub mod arp_test;
 pub mod bench;
-pub mod curl;
-pub mod helpers;
 pub mod clear;
+pub mod curl;
 pub mod echo;
 pub mod help;
+pub mod helpers;
 pub mod loglevel;
 pub mod lspci;
 pub mod netcat;

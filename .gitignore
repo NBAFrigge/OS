@@ -2,3 +2,4 @@
 deploy.sh
 /benchmarks/rust/target
 /benchmarks/go/bench
+.ua/

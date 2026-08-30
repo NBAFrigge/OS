@@ -5,11 +5,13 @@ use spin::Mutex;
 
 use crate::command_handler::commands::arp_test::cmd_arp_test;
 use crate::command_handler::commands::bench::cmd_bench;
-use crate::command_handler::commands::curl::cmd_curl;
 use crate::command_handler::commands::clear::cmd_clear;
+use crate::command_handler::commands::curl::cmd_curl;
 use crate::command_handler::commands::echo::cmd_echo;
 use crate::command_handler::commands::help::cmd_help;
-use crate::command_handler::commands::loglevel::{cmd_get_loglevel, cmd_set_loglevel};
+use crate::command_handler::commands::loglevel::{
+    cmd_get_loglevel, cmd_set_loglevel,
+};
 use crate::command_handler::commands::lspci::cmd_lspci;
 use crate::command_handler::commands::netcat::cmd_netcat;
 use crate::command_handler::commands::paging::cmd_paging;
@@ -110,5 +112,6 @@ pub fn run_command(name: &str, args: &str) {
     }
 }
 lazy_static! {
-    pub static ref COMMAND_REGISTRY: Mutex<Vec<Command>> = Mutex::new(Vec::new());
+    pub static ref COMMAND_REGISTRY: Mutex<Vec<Command>> =
+        Mutex::new(Vec::new());
 }

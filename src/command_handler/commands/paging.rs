@@ -1,4 +1,6 @@
-use crate::memory::{buddy_allocator::BUDDYALLOCATOR, frame_allocator::FRAME_ALLOCATOR};
+use crate::memory::{
+    buddy_allocator::BUDDYALLOCATOR, frame_allocator::FRAME_ALLOCATOR,
+};
 
 pub fn cmd_paging(_args: &str) {
     if let Some(allocator) = &*FRAME_ALLOCATOR.lock() {

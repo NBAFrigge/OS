@@ -40,7 +40,9 @@ pub fn parse_url(url: &str) -> Option<UrlParsed> {
         port = splitted_port[0][1..].parse::<u16>().unwrap();
         if splitted_port.len() > 1 {
             index = 0;
-            while index < splitted_scheme[1].len() && splitted_host.1.as_bytes()[index] != b'/' {
+            while index < splitted_scheme[1].len()
+                && splitted_host.1.as_bytes()[index] != b'/'
+            {
                 index += 1;
             }
             path = splitted_host.1.split_at(index).1;

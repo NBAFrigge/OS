@@ -1,7 +1,9 @@
 use core::sync::atomic::{AtomicU16, Ordering};
 
 use crate::kdebug;
-use crate::net::{arp, interface::NETWORK_INTERFACE, ipv4::ipv4_struct::ip_Header};
+use crate::net::{
+    arp, interface::NETWORK_INTERFACE, ipv4::ipv4_struct::ip_Header,
+};
 
 pub fn send(dst_ip: [u8; 4], protocol: u8, payload: &[u8]) {
     let id = IP_PACKET_ID.fetch_add(1, Ordering::SeqCst);
@@ -45,7 +47,9 @@ pub fn send(dst_ip: [u8; 4], protocol: u8, payload: &[u8]) {
             .lock()
             .send_ipv4(header, payload, broadcast_mac);
     } else {
-        if let Some(mac) = arp::protocol::resolve_mac(&target_ip_for_arp, src_ip, src_mac) {
+        if let Some(mac) =
+            arp::protocol::resolve_mac(&target_ip_for_arp, src_ip, src_mac)
+        {
             NETWORK_INTERFACE.lock().send_ipv4(header, payload, mac);
         } else {
             kdebug!(

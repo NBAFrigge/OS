@@ -51,7 +51,13 @@ impl KernelLogger {
                 LogLevel::Trace => ("TRACE", "\x1b[90m"),
             };
 
-            serial_println!("{}[{}]\x1b[0m [{}] {}", color_code, level_str, target, args);
+            serial_println!(
+                "{}[{}]\x1b[0m [{}] {}",
+                color_code,
+                level_str,
+                target,
+                args
+            );
         }
     }
 

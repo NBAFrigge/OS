@@ -19,7 +19,8 @@ impl Slab {
         Self {
             start_addr,
             num_allocated_objects: 0,
-            first_free_slot: (start_addr as usize + size_of::<Slab>()) as *mut u8,
+            first_free_slot: (start_addr as usize + size_of::<Slab>())
+                as *mut u8,
             next: core::ptr::null_mut(),
             prev: core::ptr::null_mut(),
         }
@@ -61,11 +62,12 @@ impl SlabManager {
     pub fn init(&mut self) {
         let free_space = PAGE_SIZE - size_of::<Slab>();
         for order in 0..MAX_ORDERS {
-            self.slab_list[order].object_size = if 1 << order >= size_of::<*mut u8>() {
-                1 << order
-            } else {
-                size_of::<*mut u8>()
-            };
+            self.slab_list[order].object_size =
+                if 1 << order >= size_of::<*mut u8>() {
+                    1 << order
+                } else {
+                    size_of::<*mut u8>()
+                };
 
             self.slab_list[order].num_objects_per_slab =
                 free_space / (self.slab_list[order].object_size);
@@ -106,10 +108,13 @@ impl SlabManager {
             core::ptr::write(start_addr as *mut Slab, new_slab);
             cache.slabs_empty = start_addr as *mut Slab;
             for i in 0..cache.num_objects_per_slab - 1 {
-                *((start_addr as usize + size_of::<Slab>() + cache.object_size * i)
-                    as *mut *mut u8) =
-                    (start_addr as usize + size_of::<Slab>() + cache.object_size * (i + 1))
-                        as *mut u8;
+                *((start_addr as usize
+                    + size_of::<Slab>()
+                    + cache.object_size * i)
+                    as *mut *mut u8) = (start_addr as usize
+                    + size_of::<Slab>()
+                    + cache.object_size * (i + 1))
+                    as *mut u8;
             }
             *((start_addr as usize
                 + size_of::<Slab>()

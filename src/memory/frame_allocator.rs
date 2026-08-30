@@ -31,7 +31,9 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
             .memory_map
             .iter()
             .filter(|p| p.region_type == MemoryRegionType::Usable)
-            .flat_map(|p| (p.range.start_addr()..p.range.end_addr()).step_by(4096))
+            .flat_map(|p| {
+                (p.range.start_addr()..p.range.end_addr()).step_by(4096)
+            })
             .nth(self.next);
 
         if address == None {
@@ -44,5 +46,6 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 }
 
 lazy_static! {
-    pub static ref FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> = Mutex::new(None);
+    pub static ref FRAME_ALLOCATOR: Mutex<Option<BootInfoFrameAllocator>> =
+        Mutex::new(None);
 }

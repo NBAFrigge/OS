@@ -88,7 +88,9 @@ impl E1000 {
         let devices = PciAddress::list_all();
         let mut nic = devices
             .into_iter()
-            .find(|d| d.get_vendor_id() == 0x8086 && d.get_device_id() == 0x100E)
+            .find(|d| {
+                d.get_vendor_id() == 0x8086 && d.get_device_id() == 0x100E
+            })
             .ok_or("E1000 not found")?;
 
         nic.enable_bus_mastering();
@@ -102,19 +104,33 @@ impl E1000 {
         let base_addr = bar0.address + offset;
 
         unsafe {
-            let ctrl = read_volatile((base_addr + REG_CTRL as u64) as *const u32);
-            write_volatile((base_addr + REG_CTRL as u64) as *mut u32, ctrl | CTRL_RST);
-            while read_volatile((base_addr + REG_CTRL as u64) as *const u32) & CTRL_RST != 0 {}
+            let ctrl =
+                read_volatile((base_addr + REG_CTRL as u64) as *const u32);
+            write_volatile(
+                (base_addr + REG_CTRL as u64) as *mut u32,
+                ctrl | CTRL_RST,
+            );
+            while read_volatile((base_addr + REG_CTRL as u64) as *const u32)
+                & CTRL_RST
+                != 0
+            {}
 
-            let mut ctrl_after_reset = read_volatile((base_addr + REG_CTRL as u64) as *const u32);
+            let mut ctrl_after_reset =
+                read_volatile((base_addr + REG_CTRL as u64) as *const u32);
             ctrl_after_reset |= (1 << 6) | (1 << 5);
-            write_volatile((base_addr + REG_CTRL as u64) as *mut u32, ctrl_after_reset);
+            write_volatile(
+                (base_addr + REG_CTRL as u64) as *mut u32,
+                ctrl_after_reset,
+            );
 
             for i in 0..128 {
                 write_volatile((base_addr + 0x5200 + (i * 4)) as *mut u32, 0);
             }
 
-            write_volatile((base_addr + REG_IMC as u64) as *mut u32, 0xFFFFFFFF);
+            write_volatile(
+                (base_addr + REG_IMC as u64) as *mut u32,
+                0xFFFFFFFF,
+            );
         }
 
         let mac = unsafe { Self::read_mac(base_addr) };
@@ -129,11 +145,14 @@ impl E1000 {
             write_volatile((base_addr + REG_RAH as u64) as *mut u32, rah);
         }
 
-        let mut allocator_guard = crate::memory::frame_allocator::FRAME_ALLOCATOR.lock();
-        let allocator = allocator_guard.as_mut().expect("Frame allocator not init");
+        let mut allocator_guard =
+            crate::memory::frame_allocator::FRAME_ALLOCATOR.lock();
+        let allocator =
+            allocator_guard.as_mut().expect("Frame allocator not init");
 
         let mut get_page = || -> (u64, u64) {
-            let frame = allocator.allocate_frame().expect("Out of memory for NIC");
+            let frame =
+                allocator.allocate_frame().expect("Out of memory for NIC");
             let phys = frame.start_address().as_u64();
             let virt = phys + offset;
             (phys, virt)
@@ -141,7 +160,10 @@ impl E1000 {
 
         let (rx_ring_phys, rx_ring_virt) = get_page();
         let rx_ring = unsafe {
-            core::slice::from_raw_parts_mut(rx_ring_virt as *mut RxDescriptor, RX_DESC_COUNT)
+            core::slice::from_raw_parts_mut(
+                rx_ring_virt as *mut RxDescriptor,
+                RX_DESC_COUNT,
+            )
         };
         let mut rx_buffers = Vec::with_capacity(RX_DESC_COUNT);
 
@@ -155,7 +177,9 @@ impl E1000 {
                 errors: 0,
                 special: 0,
             };
-            let buf_slice = unsafe { core::slice::from_raw_parts_mut(buf_virt as *mut u8, 2048) };
+            let buf_slice = unsafe {
+                core::slice::from_raw_parts_mut(buf_virt as *mut u8, 2048)
+            };
             rx_buffers.push(buf_slice);
         }
 
@@ -179,13 +203,21 @@ impl E1000 {
             );
             write_volatile(
                 (base_addr + REG_RCTL as u64) as *mut u32,
-                RCTL_EN | RCTL_SBP | RCTL_UPE | RCTL_MPE | RCTL_BAM | RCTL_BSIZE_2048,
+                RCTL_EN
+                    | RCTL_SBP
+                    | RCTL_UPE
+                    | RCTL_MPE
+                    | RCTL_BAM
+                    | RCTL_BSIZE_2048,
             );
         }
 
         let (tx_ring_phys, tx_ring_virt) = get_page();
         let tx_ring = unsafe {
-            core::slice::from_raw_parts_mut(tx_ring_virt as *mut TxDescriptor, TX_DESC_COUNT)
+            core::slice::from_raw_parts_mut(
+                tx_ring_virt as *mut TxDescriptor,
+                TX_DESC_COUNT,
+            )
         };
         let mut tx_buffers = Vec::with_capacity(TX_DESC_COUNT);
 
@@ -200,7 +232,9 @@ impl E1000 {
                 css: 0,
                 special: 0,
             };
-            let buf_slice = unsafe { core::slice::from_raw_parts_mut(buf_virt as *mut u8, 2048) };
+            let buf_slice = unsafe {
+                core::slice::from_raw_parts_mut(buf_virt as *mut u8, 2048)
+            };
             tx_buffers.push(buf_slice);
         }
 
@@ -256,10 +290,14 @@ impl E1000 {
     unsafe fn read_mac(base_addr: u64) -> [u8; 6] {
         let mut mac = [0u8; 6];
         for i in 0..3u32 {
-            write_volatile((base_addr + REG_EERD as u64) as *mut u32, (i << 8) | 0x1);
+            write_volatile(
+                (base_addr + REG_EERD as u64) as *mut u32,
+                (i << 8) | 0x1,
+            );
             let mut val;
             loop {
-                val = read_volatile((base_addr + REG_EERD as u64) as *const u32);
+                val =
+                    read_volatile((base_addr + REG_EERD as u64) as *const u32);
                 if val & (1 << 4) != 0 {
                     break;
                 }
@@ -282,22 +320,30 @@ impl E1000 {
             return false;
         }
 
-        self.tx_buffers[self.tx_tail as usize][..frame.len()].copy_from_slice(frame);
+        self.tx_buffers[self.tx_tail as usize][..frame.len()]
+            .copy_from_slice(frame);
         self.tx_ring[self.tx_tail as usize].length = frame.len() as u16;
         self.tx_ring[self.tx_tail as usize].cmd = CMD_EOP_IFCS_RS;
         self.tx_ring[self.tx_tail as usize].status = 0;
 
-        core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+        core::sync::atomic::compiler_fence(
+            core::sync::atomic::Ordering::SeqCst,
+        );
 
         self.tx_tail = (self.tx_tail + 1) % TX_DESC_COUNT as u32;
         unsafe {
-            write_volatile((self.base_addr + REG_TDT as u64) as *mut u32, self.tx_tail);
+            write_volatile(
+                (self.base_addr + REG_TDT as u64) as *mut u32,
+                self.tx_tail,
+            );
         }
 
         true
     }
     pub fn receive(&mut self) -> Option<&[u8]> {
-        let status = unsafe { read_volatile(&self.rx_ring[self.rx_next].status as *const u8) };
+        let status = unsafe {
+            read_volatile(&self.rx_ring[self.rx_next].status as *const u8)
+        };
         if status & 0x1 == 0 {
             return None;
         }

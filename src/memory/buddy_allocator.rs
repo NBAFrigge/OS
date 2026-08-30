@@ -1,5 +1,5 @@
-use core::alloc::{GlobalAlloc, Layout};
 use crate::sync::IrqMutex;
+use core::alloc::{GlobalAlloc, Layout};
 
 pub const PAGE_SIZE: usize = 4096;
 pub const MAX_ORDERS: usize = 11;
@@ -78,7 +78,8 @@ impl BuddyAllocator {
         }
 
         while i > order {
-            let second_half = candidate.add(PAGE_SIZE << (i - 1)) as *mut FreeBlockNode;
+            let second_half =
+                candidate.add(PAGE_SIZE << (i - 1)) as *mut FreeBlockNode;
             (*second_half).next = self.free_lists[i - 1];
             (*second_half).prev = core::ptr::null_mut();
             if !self.free_lists[i - 1].is_null() {
@@ -105,7 +106,9 @@ impl BuddyAllocator {
             let buddy_ptr = (ptr as usize ^ (PAGE_SIZE << i)) as *mut u8;
             let mut potential_buddy = self.free_lists[i];
 
-            while potential_buddy as *mut u8 != buddy_ptr && !potential_buddy.is_null() {
+            while potential_buddy as *mut u8 != buddy_ptr
+                && !potential_buddy.is_null()
+            {
                 potential_buddy = (*potential_buddy).next
             }
 

@@ -5,7 +5,9 @@ use alloc::{
 
 use crate::{
     kdebug,
-    net::ipv4::http::{self, client, constants::HttpError, request, url_parser::parse_url},
+    net::ipv4::http::{
+        self, client, constants::HttpError, request, url_parser::parse_url,
+    },
     task::task::sleep,
     timer::tsc,
 };
@@ -55,7 +57,8 @@ pub fn cmd_bench(args: &str) {
 
     println!("starting keep-alive bench");
 
-    let mut ka_client = match client::connection::new(host.as_str(), port, true) {
+    let mut ka_client = match client::connection::new(host.as_str(), port, true)
+    {
         Ok(c) => c,
         Err(e) => {
             println!("bench: {}", e.to_string());
@@ -95,8 +98,14 @@ pub fn cmd_bench(args: &str) {
         match res {
             Ok(_) => {
                 ka_response_time_vec.push(delta);
-                ka_ttfb_vec.push(client::LAST_TTFB_US.load(core::sync::atomic::Ordering::Relaxed));
-                ka_read_vec.push(client::LAST_READ_US.load(core::sync::atomic::Ordering::Relaxed));
+                ka_ttfb_vec.push(
+                    client::LAST_TTFB_US
+                        .load(core::sync::atomic::Ordering::Relaxed),
+                );
+                ka_read_vec.push(
+                    client::LAST_READ_US
+                        .load(core::sync::atomic::Ordering::Relaxed),
+                );
             }
             Err(e) => match e {
                 HttpError::Timeout => ka_err_timeout += 1,
@@ -138,8 +147,12 @@ pub fn cmd_bench(args: &str) {
 
     for _ in 0..num_requests {
         let start = tsc::now_us();
-        let mut pr_client =
-            client::connection::new_with_ip(host.as_str(), resolved_ip, port, false);
+        let mut pr_client = client::connection::new_with_ip(
+            host.as_str(),
+            resolved_ip,
+            port,
+            false,
+        );
         match pr_client.connect() {
             Ok(_) => {
                 let res = pr_client.send(request.clone());

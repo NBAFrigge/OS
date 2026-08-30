@@ -8,13 +8,18 @@ use core::sync::atomic::Ordering;
 use crate::{
     idt::interrupt::TICKS,
     kdebug,
-    net::ipv4::http::{client, constants::METHOD, request::Request, url_parser::parse_url},
+    net::ipv4::http::{
+        client, constants::METHOD, request::Request, url_parser::parse_url,
+    },
 };
 
 pub fn cmd_curl(args: &str) {
     let tokens = tokenize(args);
     if tokens.is_empty() {
-        println!("Usage: curl [-X METHOD] [-H \"header: value\"] [-d body] [--time] <url>");
+        println!(
+            "Usage: curl [-X METHOD] [-H \"header: value\"] [-d body] \
+             [--time] <url>"
+        );
         return;
     }
 
@@ -56,7 +61,10 @@ pub fn cmd_curl(args: &str) {
                 match tokens[i].split_once(": ") {
                     Some((k, v)) => headers.push((k.into(), v.into())),
                     None => {
-                        println!("curl: invalid header format, expected \"Key: Value\"");
+                        println!(
+                            "curl: invalid header format, expected \"Key: \
+                             Value\""
+                        );
                         return;
                     }
                 }

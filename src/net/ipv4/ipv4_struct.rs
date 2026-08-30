@@ -51,7 +51,8 @@ impl ip_Header {
         let total_size = header_size + payload.len();
 
         let header_ptr = self as *const Self as *const u8;
-        let header_slice = unsafe { core::slice::from_raw_parts(header_ptr, header_size) };
+        let header_slice =
+            unsafe { core::slice::from_raw_parts(header_ptr, header_size) };
 
         target_buffer[0..header_size].copy_from_slice(header_slice);
 

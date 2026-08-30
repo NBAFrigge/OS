@@ -14,7 +14,12 @@ pub struct Bar {
 }
 
 impl Bar {
-    pub fn new(address: u64, size: usize, bar_type: BarType, prefetchable: bool) -> Self {
+    pub fn new(
+        address: u64,
+        size: usize,
+        bar_type: BarType,
+        prefetchable: bool,
+    ) -> Self {
         Bar {
             address,
             size,

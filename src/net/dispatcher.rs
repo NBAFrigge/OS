@@ -7,7 +7,9 @@ use crate::net::{
     interface::NETWORK_INTERFACE,
     ipv4::{
         ipv4_struct::ip_Header,
-        transport::{icmp::icmp::handle_icmp_packet, udp::socket::handle_udp_packet},
+        transport::{
+            icmp::icmp::handle_icmp_packet, udp::socket::handle_udp_packet,
+        },
     },
 };
 
@@ -32,7 +34,9 @@ pub fn poll_network() {
                 0x0806 => {
                     // ARP
                     if let Some(arp_packet) =
-                        arp::arp_struct::ArpPacket::from_bytes(decoded_frame.payload)
+                        arp::arp_struct::ArpPacket::from_bytes(
+                            decoded_frame.payload,
+                        )
                     {
                         arp::protocol::handle_packet(arp_packet);
                     }
@@ -48,11 +52,14 @@ pub fn poll_network() {
                     }
 
                     let ip_header = unsafe {
-                        core::ptr::read_unaligned(decoded_frame.payload.as_ptr() as *const ip_Header)
+                        core::ptr::read_unaligned(
+                            decoded_frame.payload.as_ptr() as *const ip_Header,
+                        )
                     };
 
                     let header_len = (ip_header.ihl() * 4) as usize;
-                    let total_len = u16::from_be(ip_header.total_length) as usize;
+                    let total_len =
+                        u16::from_be(ip_header.total_length) as usize;
 
                     if header_len < 20 {
                         ktrace!("IPv4: invalid IHL {}", ip_header.ihl());
@@ -66,7 +73,9 @@ pub fn poll_network() {
                         );
                         continue;
                     }
-                    if total_len < header_len || decoded_frame.payload.len() < total_len {
+                    if total_len < header_len
+                        || decoded_frame.payload.len() < total_len
+                    {
                         ktrace!(
                             "IPv4: invalid total_length {} (buf={}, hdr={})",
                             total_len,
@@ -83,7 +92,8 @@ pub fn poll_network() {
                     let fragment_offset = flags_fragment & 0x1FFF;
                     if more_fragments || fragment_offset != 0 {
                         ktrace!(
-                            "IPv4: fragmented packet dropped (flags={:#x} offset={})",
+                            "IPv4: fragmented packet dropped (flags={:#x} \
+                             offset={})",
                             flags_fragment >> 13,
                             fragment_offset
                         );
@@ -101,10 +111,17 @@ pub fn poll_network() {
                         }
                         17 => {
                             // UDP
-                            handle_udp_packet(&ip_header.src_ip, &ip_header.dst_ip, payload);
+                            handle_udp_packet(
+                                &ip_header.src_ip,
+                                &ip_header.dst_ip,
+                                payload,
+                            );
                         }
                         _ => {
-                            ktrace!("IPv4: unknown protocol {}", ip_header.protocol);
+                            ktrace!(
+                                "IPv4: unknown protocol {}",
+                                ip_header.protocol
+                            );
                         }
                     }
                 }
@@ -124,11 +141,10 @@ pub fn flush_tx() {
     if let Some(ref mut nic) = *E1000_DRIVER.lock() {
         let mut interface = NETWORK_INTERFACE.lock();
         while let Some(frame) = interface.tx_queue.pop_front() {
-            if !nic.send(&frame){
+            if !nic.send(&frame) {
                 interface.tx_queue.push_front(frame);
                 break;
             }
         }
     }
 }
-

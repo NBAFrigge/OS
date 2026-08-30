@@ -4,7 +4,9 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use x86_64::instructions::port::Port;
 use x86_64::registers::control::Cr2;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::structures::idt::{
+    InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode,
+};
 
 use crate::apic::apic::send_eoi;
 use crate::crypto::random::{EntropyPool, GLOBAL_ENTROPY};
@@ -34,7 +36,8 @@ lazy_static! {
         locked_idt.overflow.set_handler_fn(overflow_handler);
         locked_idt.double_fault.set_handler_fn(double_fault_handler);
         locked_idt.page_fault.set_handler_fn(page_fault_handler);
-        locked_idt[KEYBOARD_INTERRUPT_ID as usize].set_handler_fn(keyboard_handler);
+        locked_idt[KEYBOARD_INTERRUPT_ID as usize]
+            .set_handler_fn(keyboard_handler);
         locked_idt[TIMER_INTERRUPT_ID as usize].set_handler_fn(timer_handler);
         drop(locked_idt);
         idt
@@ -49,7 +52,10 @@ pub fn init_idt() {
     drop(idt)
 }
 
-pub fn add_handler(index_id: usize, f: extern "x86-interrupt" fn(InterruptStackFrame)) {
+pub fn add_handler(
+    index_id: usize,
+    f: extern "x86-interrupt" fn(InterruptStackFrame),
+) {
     let mut idt = IDT.lock();
     idt[index_id].set_handler_fn(f);
     unsafe { idt.load_unsafe() }
@@ -66,7 +72,10 @@ macro_rules! catchall_handler {
 
 macro_rules! _double_fault_handler {
     ($name:ident) => {
-        extern "x86-interrupt" fn $name(stack_frame: InterruptStackFrame, error_code: u64) -> ! {
+        extern "x86-interrupt" fn $name(
+            stack_frame: InterruptStackFrame,
+            error_code: u64,
+        ) -> ! {
             println!(
                 "EXCEPTION DOUBLE FAULT [{}]: {}\n{:#?}",
                 error_code,
@@ -87,7 +96,8 @@ macro_rules! _page_fault_handler {
             let failed_reg = Cr2::read().as_u64();
 
             println!(
-                "EXCEPTION PAGE FAULT:\nError Code: {:?}\nAccessed Address: {:#x}\n{:#?}",
+                "EXCEPTION PAGE FAULT:\nError Code: {:?}\nAccessed Address: \
+                 {:#x}\n{:#?}",
                 error_code, failed_reg, stack_frame
             );
             loop {}

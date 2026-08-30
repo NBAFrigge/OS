@@ -18,7 +18,12 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(method: METHOD, url: String, headers: Vec<(String, String)>, body: &[u8]) -> Self {
+    pub fn new(
+        method: METHOD,
+        url: String,
+        headers: Vec<(String, String)>,
+        body: &[u8],
+    ) -> Self {
         Self {
             method,
             url,
@@ -42,7 +47,8 @@ impl Request {
         request_bytes.extend_from_slice(parsed_url.host.as_bytes());
         if parsed_url.port != 80 {
             request_bytes.extend_from_slice(b":");
-            request_bytes.extend_from_slice(format!("{}", parsed_url.port).as_bytes());
+            request_bytes
+                .extend_from_slice(format!("{}", parsed_url.port).as_bytes());
         }
         request_bytes.extend_from_slice(EMPTYLINE.as_bytes());
 
@@ -58,7 +64,8 @@ impl Request {
 
         if !self.body.is_empty() {
             request_bytes.extend_from_slice(b"Content-Length: ");
-            request_bytes.extend_from_slice(format!("{}", self.body.len()).as_bytes());
+            request_bytes
+                .extend_from_slice(format!("{}", self.body.len()).as_bytes());
             request_bytes.extend_from_slice(EMPTYLINE.as_bytes());
         }
 
@@ -122,7 +129,9 @@ pub fn run_tests() {
         failed
     );
 
-    let result = Request::new(METHOD::GET, "not-a-url".into(), alloc::vec![], b"").build();
+    let result =
+        Request::new(METHOD::GET, "not-a-url".into(), alloc::vec![], b"")
+            .build();
     check!("invalid url returns None", result.is_none(), passed, failed);
 
     let result = Request::new(

@@ -44,7 +44,12 @@ impl Interface {
         false
     }
 
-    pub fn send_ipv4(&mut self, mut header: ip_Header, payload: &[u8], target_mac: [u8; 6]) {
+    pub fn send_ipv4(
+        &mut self,
+        mut header: ip_Header,
+        payload: &[u8],
+        target_mac: [u8; 6],
+    ) {
         header.calculate_checksum();
 
         let mut ip_payload = [0u8; 1480];
@@ -61,7 +66,12 @@ impl Interface {
         self.send_ethernet(dst_mac, [0x08, 0x06], arp_packet.as_bytes());
     }
 
-    fn send_ethernet(&mut self, dest_mac: [u8; 6], ether_type: [u8; 2], payload: &[u8]) {
+    fn send_ethernet(
+        &mut self,
+        dest_mac: [u8; 6],
+        ether_type: [u8; 2],
+        payload: &[u8],
+    ) {
         let src_mac = self.hw_addr.expect("MAC not set");
         self.tx_buffer[0..6].copy_from_slice(&dest_mac);
         self.tx_buffer[6..12].copy_from_slice(&src_mac);
@@ -87,5 +97,6 @@ impl Interface {
 }
 
 lazy_static! {
-    pub static ref NETWORK_INTERFACE: IrqMutex<Interface> = IrqMutex::new(Interface::new());
+    pub static ref NETWORK_INTERFACE: IrqMutex<Interface> =
+        IrqMutex::new(Interface::new());
 }

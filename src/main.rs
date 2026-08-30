@@ -61,14 +61,19 @@ entry_point!(kernel_main);
 #[no_mangle]
 fn kernel_main(boot_info: &'static BootInfo) -> ! {
     kinfo!("Kernel started");
-    crate::memory::memory::set_physical_memory_offset(boot_info.physical_memory_offset);
+    crate::memory::memory::set_physical_memory_offset(
+        boot_info.physical_memory_offset,
+    );
     interrupt::init_idt();
 
     unsafe {
         kinfo!("Loading APIC");
         apic::apic::init(boot_info.physical_memory_offset);
         kinfo!("Loading heap");
-        memory::memory::init(&boot_info.memory_map, boot_info.physical_memory_offset);
+        memory::memory::init(
+            &boot_info.memory_map,
+            boot_info.physical_memory_offset,
+        );
     }
 
     #[cfg(feature = "tests")]

@@ -4,3 +4,4 @@ pub mod e1000;
 pub mod ethernet;
 pub mod interface;
 pub mod ipv4;
+pub mod virtio;
