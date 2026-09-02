@@ -37,6 +37,6 @@ cargo bootimage
 To run the OS use the following command:
 
 ```bash
-qemu-system-x86_64 -drive format=raw,file=target/os/debug/bootimage-OS.bin -serial stdio -netdev user,id=net0 -device e1000,netdev=net0
+qemu-system-x86_64 -drive format=raw,file=target/os/debug/bootimage-OS.bin -serial stdio -netdev user,id=net0 -device virtio-net-pci,disable-modern=on,disable-legacy=off,netdev=net0
 
 ```

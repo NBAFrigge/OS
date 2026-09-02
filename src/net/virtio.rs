@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use core::{ptr::from_raw_parts, sync::atomic::Ordering};
+use core::sync::atomic::Ordering;
 
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
@@ -11,12 +11,13 @@ use x86_64::{
 
 use crate::{
     apic::{apic::send_eoi, io_apic::add_redirect},
-    drivers::pci::{self, PciAddress},
+    drivers::pci::PciAddress,
     idt::interrupt::add_handler,
     kinfo,
     memory::{
         frame_allocator::FRAME_ALLOCATOR, memory::PHYSICAL_MEMORY_OFFSET,
     },
+    net::dispatcher::poll_network,
     sync::IrqMutex,
 };
 
@@ -54,7 +55,7 @@ pub const VIRTQ_USED_F_NO_NOTIFY: u16 = 1;
 pub const RX_QUEUE: u16 = 0;
 pub const TX_QUEUE: u16 = 1;
 
-pub const QUEUE_SIZE: usize = 256;
+pub const QUEUE_SIZE: usize = 1024;
 pub const RX_BUFFER_SIZE: usize = 2048;
 pub const VIRTIO_NET_HDR_LEN: usize = 10;
 pub const VIRTIO_NET_HDR_GSO_NONE: u8 = 0;
@@ -120,9 +121,13 @@ impl Virtqueue {
         let desc_size = 16 * qsz;
         let avail_size = 6 + 2 * qsz;
         let used_off = (desc_size + avail_size + 4095) & !4095;
-        let used_size = 6 + 8 * qsz;
-        let total = used_off + used_size;
-        let pages = (total + 4095) / 4096;
+        // Allocate for the MAX ring (QUEUE_SIZE) so the fixed-size
+        // [_; QUEUE_SIZE] avail/used structs always fit, even when the device
+        // negotiates a smaller qsz. The desc/avail/used *offsets* above stay
+        // qsz-based so they match the device's legacy layout.
+        let max_used_off = (16 * QUEUE_SIZE + 6 + 2 * QUEUE_SIZE + 4095) & !4095;
+        let max_total = max_used_off + 6 + 8 * QUEUE_SIZE;
+        let pages = (max_total + 4095) / 4096;
 
         let mut guard = FRAME_ALLOCATOR.lock();
         let allocator = guard.as_mut().expect("frame allocator not init");
@@ -192,19 +197,39 @@ impl Virtqueue {
     }
 
     fn alloc_desc(&mut self) -> Option<u16> {
-        todo!()
+        if self.num_free == 0 {
+            return None;
+        }
+        let idx = self.free_head;
+        self.free_head = self.desc[idx as usize].next;
+        self.num_free -= 1;
+        Some(idx)
     }
 
     fn free_desc(&mut self, idx: u16) {
-        todo!()
+        self.desc[idx as usize].next = self.free_head;
+        self.free_head = idx;
+        self.num_free += 1;
     }
 
     fn push_avail(&mut self, desc_idx: u16) {
-        todo!()
+        let slot = self.avail.idx as usize % self.size as usize;
+        self.avail.ring[slot] = desc_idx;
+        core::sync::atomic::compiler_fence(Ordering::SeqCst);
+        self.avail.idx = self.avail.idx.wrapping_add(1);
     }
 
     fn pop_used(&mut self) -> Option<(u16, u32)> {
-        todo!()
+        let used_idx = unsafe { core::ptr::read_volatile(&self.used.idx) };
+        if used_idx == self.last_used_idx {
+            return None;
+        }
+
+        let element =
+            self.used.ring[self.last_used_idx as usize % self.size as usize];
+        self.last_used_idx = self.last_used_idx.wrapping_add(1);
+
+        Some((element.id as u16, element.len))
     }
 }
 
@@ -221,13 +246,14 @@ extern "x86-interrupt" fn virtio_handler(_stack_frame: InterruptStackFrame) {
             let _ = Port::<u8>::new(iobase + REG_ISR_STATUS).read();
         }
     }
+    poll_network();
     unsafe {
         send_eoi();
     }
 }
 
 impl VirtioNet {
-    pub fn init() -> Result<(), &'static str> {
+    pub fn init() -> Result<Self, &'static str> {
         let offset = PHYSICAL_MEMORY_OFFSET.load(Ordering::Relaxed);
         let devices = PciAddress::list_all();
         let mut nic = devices
@@ -247,55 +273,127 @@ impl VirtioNet {
         let iobase = bar0.address as u16;
         add_handler((32 + irq) as usize, virtio_handler);
 
-        let mut mac = [0u8; 6];
+        // Handshake
         unsafe {
             Port::<u8>::new(iobase + REG_DEVICE_STATUS).write(0);
             Port::<u8>::new(iobase + REG_DEVICE_STATUS)
                 .write(STATUS_ACKNOWLEDGE);
             Port::<u8>::new(iobase + REG_DEVICE_STATUS)
                 .write(STATUS_ACKNOWLEDGE | STATUS_DRIVER);
+        }
 
-            let features =
-                Port::<u32>::new(iobase + REG_DEVICE_FEATURES).read();
-            Port::<u32>::new(iobase + REG_DRIVER_FEATURES)
-                .write(features & VIRTIO_NET_F_MAC);
+        Self::negotiate_features(iobase);
 
+        let mut mac = [0u8; 6];
+        unsafe {
             for i in 0..6 {
                 mac[i] =
                     Port::<u8>::new(iobase + REG_CONFIG_MAC + i as u16).read();
             }
         }
 
+        // Set up the virtqueues (this writes each queue's PFN to the device).
+        let rx = Self::setup_queue(iobase, RX_QUEUE, offset);
+        let tx = Self::setup_queue(iobase, TX_QUEUE, offset);
+
+        unsafe {
+            Port::<u8>::new(iobase + REG_DEVICE_STATUS)
+                .write(STATUS_ACKNOWLEDGE | STATUS_DRIVER | STATUS_DRIVER_OK);
+        }
+
+        let mut dev = VirtioNet {
+            iobase,
+            mac,
+            rx,
+            tx,
+        };
+        dev.fill_rx();
+
         kinfo!("virtio-net iobase {:#x} mac {:02x?}", iobase, mac);
-        Ok(())
+        Ok(dev)
     }
 
     fn negotiate_features(iobase: u16) -> u32 {
-        todo!()
+        unsafe {
+            let features =
+                Port::<u32>::new(iobase + REG_DEVICE_FEATURES).read();
+            let accepted = features & VIRTIO_NET_F_MAC;
+            Port::<u32>::new(iobase + REG_DRIVER_FEATURES).write(accepted);
+            accepted
+        }
     }
 
     fn setup_queue(iobase: u16, index: u16, offset: u64) -> Virtqueue {
-        todo!()
+        unsafe {
+            Port::<u16>::new(iobase + REG_QUEUE_SELECT).write(index);
+            let qsz = Port::<u16>::new(iobase + REG_QUEUE_SIZE).read();
+            assert!(
+                qsz.is_power_of_two() && qsz as usize <= QUEUE_SIZE,
+                "virtqueue size {} unsupported (max {})",
+                qsz,
+                QUEUE_SIZE
+            );
+
+            let vq = Virtqueue::new(qsz, offset);
+            Port::<u32>::new(iobase + REG_QUEUE_ADDRESS)
+                .write((vq.region_phys >> 12) as u32);
+            vq
+        }
     }
 
     fn fill_rx(&mut self) {
-        todo!()
+        for i in 0..self.rx.size as usize {
+            self.rx.desc[i].flags = VIRTQ_DESC_F_WRITE;
+            self.rx.avail.ring[i] = i as u16;
+        }
+        core::sync::atomic::compiler_fence(Ordering::SeqCst);
+        self.rx.avail.idx = self.rx.size;
+        core::sync::atomic::compiler_fence(Ordering::SeqCst);
+        self.notify(RX_QUEUE);
     }
 
     fn notify(&self, queue: u16) {
-        todo!()
+        unsafe {
+            Port::<u16>::new(self.iobase + REG_QUEUE_NOTIFY).write(queue);
+        }
     }
 
     pub fn send(&mut self, frame: &[u8]) -> bool {
-        todo!()
+        self.reclaim_tx();
+        if frame.len() > 2048 - VIRTIO_NET_HDR_LEN {
+            return false;
+        }
+
+        let idx = match self.tx.alloc_desc() {
+            Some(i) => i,
+            None => return false,
+        };
+
+        self.tx.buffers[idx as usize][..VIRTIO_NET_HDR_LEN].fill(0);
+        self.tx.buffers[idx as usize]
+            [VIRTIO_NET_HDR_LEN..VIRTIO_NET_HDR_LEN + frame.len()]
+            .copy_from_slice(frame);
+
+        self.tx.desc[idx as usize].len =
+            (VIRTIO_NET_HDR_LEN + frame.len()) as u32;
+        self.tx.desc[idx as usize].flags = 0;
+        self.tx.push_avail(idx);
+        self.notify(TX_QUEUE);
+
+        true
     }
 
     pub fn receive(&mut self) -> Option<&[u8]> {
-        todo!()
+        let (id, len) = self.rx.pop_used()?;
+        self.rx.push_avail(id);
+        self.notify(RX_QUEUE);
+        Some(&self.rx.buffers[id as usize][VIRTIO_NET_HDR_LEN..len as usize])
     }
 
     fn reclaim_tx(&mut self) {
-        todo!()
+        while let Some((id, _)) = self.tx.pop_used() {
+            self.tx.free_desc(id);
+        }
     }
 }
 

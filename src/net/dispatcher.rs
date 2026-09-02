@@ -2,7 +2,7 @@ use crate::ktrace;
 use crate::net::ipv4::transport::tcp::socket::handle_tcp_packet;
 use crate::net::{
     arp,
-    e1000::E1000_DRIVER,
+    virtio::VIRTIO_NET_DRIVER,
     ethernet,
     interface::NETWORK_INTERFACE,
     ipv4::{
@@ -14,7 +14,7 @@ use crate::net::{
 };
 
 pub fn poll_network() {
-    if let Some(ref mut nic) = *E1000_DRIVER.lock() {
+    if let Some(ref mut nic) = *VIRTIO_NET_DRIVER.lock() {
         let mut interface = NETWORK_INTERFACE.lock();
         while let Some(frame_bytes) = nic.receive() {
             interface.rx_queue.push_back(frame_bytes.to_vec());
@@ -138,7 +138,7 @@ pub fn poll_network() {
 }
 
 pub fn flush_tx() {
-    if let Some(ref mut nic) = *E1000_DRIVER.lock() {
+    if let Some(ref mut nic) = *VIRTIO_NET_DRIVER.lock() {
         let mut interface = NETWORK_INTERFACE.lock();
         while let Some(frame) = interface.tx_queue.pop_front() {
             if !nic.send(&frame) {

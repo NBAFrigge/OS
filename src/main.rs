@@ -26,9 +26,9 @@ use spin::Mutex;
 use crate::{
     crypto::random::GLOBAL_ENTROPY,
     net::{
-        e1000::{E1000, E1000_DRIVER},
         interface::NETWORK_INTERFACE,
         ipv4::transport::udp::dhcp::protocol::dhcp_task,
+        virtio::{VirtioNet, VIRTIO_NET_DRIVER},
     },
     shell::shell::shell_task,
     task::task::{idle_task, Task},
@@ -85,13 +85,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     command_handler::command_handler::init_commands();
 
-    let e1000 = E1000::init().unwrap_or_else(|err| {
+    let net = VirtioNet::init().unwrap_or_else(|err| {
         kerror!("E1000 init failed: {}", err);
         panic!("E1000 init failed");
     });
-    *E1000_DRIVER.lock() = Some(e1000);
+    *VIRTIO_NET_DRIVER.lock() = Some(net);
 
-    if let Some(ref nic) = *E1000_DRIVER.lock() {
+    if let Some(ref nic) = *VIRTIO_NET_DRIVER.lock() {
         NETWORK_INTERFACE.lock().hw_addr = Some(nic.mac)
     } else {
         println!("Error: NIC not initialized");
