@@ -73,12 +73,12 @@ impl TaskManager {
         let idle_index = self.task_list.iter().position(|t| t.id == 0);
         match idle_index {
             Some(index) => {
-                if self.current_task.as_ref().unwrap().id == 0 {
-                    return self
-                        .current_task
-                        .as_ref()
-                        .unwrap()
-                        .saved_stack_pointer;
+                let current = self.current_task.as_ref().unwrap();
+                if current.id == 0
+                    || current.state == task::State::Running
+                    || current.state == task::State::Ready
+                {
+                    return current.saved_stack_pointer;
                 }
 
                 let mut idle_task = self.task_list.remove(index).unwrap();
