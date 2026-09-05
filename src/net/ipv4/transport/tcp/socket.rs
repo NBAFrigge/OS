@@ -96,16 +96,18 @@ impl TcpSocket {
     }
 
     pub fn read(&mut self, buffer: &mut [u8]) -> usize {
-        let mut n = 0;
-        while n < buffer.len() {
-            match self.rx_queue.pop_front() {
-                Some(byte) => {
-                    buffer[n] = byte;
-                    n += 1;
-                }
-                None => break,
-            }
+        let n = buffer.len().min(self.rx_queue.len());
+        if n == 0 {
+            return 0;
         }
+        let (head, tail) = self.rx_queue.as_slices();
+        let from_head = head.len().min(n);
+        buffer[..from_head].copy_from_slice(&head[..from_head]);
+        let from_tail = n - from_head;
+        if from_tail > 0 {
+            buffer[from_head..n].copy_from_slice(&tail[..from_tail]);
+        }
+        self.rx_queue.drain(..n);
         n
     }
 
