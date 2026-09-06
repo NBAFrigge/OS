@@ -139,8 +139,6 @@ impl<'a> connection<'a> {
     }
 
     pub fn send(&self, request: Request) -> Result<response, HttpError> {
-        let t_start = TICKS.load(core::sync::atomic::Ordering::Relaxed);
-
         let tuple = TcpTuple {
             local_port: self.local_port,
             remote_ip: self.remote_ip,

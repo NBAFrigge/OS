@@ -17,6 +17,7 @@ use crate::{
         },
     },
     task::task::sleep,
+    timer::tsc,
 };
 
 pub fn cmd_ping(args: &str) {
@@ -71,17 +72,20 @@ pub fn cmd_ping(args: &str) {
     *PING_REPLY.lock() = None;
     protocol::send(target_ip, 1, &ping_data);
 
-    let send_time = TICKS.load(Ordering::Relaxed);
+    let send_time = tsc::now_us();
 
-    for _ in 0..500 {
-        sleep(10);
+    loop {
         if let Some((reply_ip, seq)) = PING_REPLY.lock().take() {
-            let rtt = TICKS.load(Ordering::Relaxed) - send_time;
+            let rtt = tsc::now_us() - send_time;
             println!(
-                "64 bytes from {}.{}.{}.{}: icmp_seq={} ttl=64 time={} ms",
+                "64 bytes from {}.{}.{}.{}: icmp_seq={} ttl=64 time={} us",
                 reply_ip[0], reply_ip[1], reply_ip[2], reply_ip[3], seq, rtt
             );
             return;
+        }
+        x86_64::instructions::interrupts::enable_and_hlt();
+        if tsc::now_us() - send_time > 1_000_000 {
+            break;
         }
     }
 
