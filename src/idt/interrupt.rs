@@ -10,7 +10,7 @@ use x86_64::structures::idt::{
 
 use crate::apic::apic::send_eoi;
 use crate::crypto::random::{EntropyPool, GLOBAL_ENTROPY};
-use crate::shell::shell::{PENDING_COMMAND, SHELL};
+use crate::shell::shell::{COMMAND_RUNNING, PENDING_COMMAND, SHELL};
 use crate::task::task_manager::GLOBAL_TASK_MANAGER;
 use crate::vgadriver::keymap::KEYMAPDRIVER;
 use crate::vgadriver::writer::WRITER;
@@ -125,22 +125,39 @@ extern "x86-interrupt" fn keyboard_handler(_stack_frame: InterruptStackFrame) {
             SHELL.lock().move_index_right();
             WRITER.lock().redraw_shell_line();
         }
+        0x48 => {
+            if !COMMAND_RUNNING.load(core::sync::atomic::Ordering::Relaxed) {
+                SHELL.lock().history_prev();
+                WRITER.lock().redraw_shell_line();
+            }
+        }
+        0x50 => {
+            if !COMMAND_RUNNING.load(core::sync::atomic::Ordering::Relaxed) {
+                SHELL.lock().history_next();
+                WRITER.lock().redraw_shell_line();
+            }
+        }
         _ => {
             let c = KEYMAPDRIVER.lock().convert(scancode);
-            if c != '\0' {
-                if c == '\x08' {
+            match c {
+                '\0' => {}
+                '\x08' => {
                     // backspace
                     SHELL.lock().delete_char();
                     WRITER.lock().redraw_shell_line();
-                } else if c == '\n' {
+                }
+                '\n' => {
                     println!();
 
                     let command_input = {
                         let mut shell = SHELL.lock();
                         shell.send_buffer()
                     };
+                    SHELL.lock().history_push(&command_input);
                     *PENDING_COMMAND.lock() = Some(command_input);
-                } else {
+                }
+
+                _ => {
                     SHELL.lock().add_char(c);
                     WRITER.lock().redraw_shell_line();
                 }

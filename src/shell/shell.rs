@@ -1,5 +1,6 @@
-use core::{ptr::null, sync::atomic::Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 
+use alloc::collections::vec_deque::VecDeque;
 use alloc::string::String;
 use lazy_static::lazy_static;
 use x86_64::instructions::interrupts::without_interrupts;
@@ -14,6 +15,10 @@ use crate::{
     vgadriver::writer::WRITER,
 };
 
+const HISTORY_CAPACITY: usize = 256;
+
+pub static COMMAND_RUNNING: AtomicBool = AtomicBool::new(false);
+
 #[derive(PartialEq, Eq)]
 pub enum HandlerResult {
     Continue,
@@ -23,6 +28,8 @@ pub enum HandlerResult {
 pub struct Shell {
     pub buffer: String,
     pub index: u8,
+    pub history: VecDeque<String>,
+    pub history_index: usize,
     pub on_tick: Option<fn() -> HandlerResult>,
     pub on_input: Option<fn(&str) -> HandlerResult>,
     pub on_close: Option<fn() -> HandlerResult>,
@@ -33,6 +40,8 @@ impl Shell {
         Shell {
             buffer: String::with_capacity(80),
             index: 0,
+            history: VecDeque::with_capacity(HISTORY_CAPACITY),
+            history_index: 0,
             on_tick: None,
             on_input: None,
             on_close: None,
@@ -77,6 +86,45 @@ impl Shell {
         let input = core::mem::take(&mut self.buffer);
         self.index = 0;
         input
+    }
+
+    pub fn history_next(&mut self) {
+        if self.history_index == 0 {
+            return;
+        }
+        self.history_index -= 1;
+        if self.history_index == 0 {
+            self.buffer.clear();
+            self.index = 0;
+        } else {
+            self.buffer = self.history[self.history_index - 1].clone();
+            self.index = self.buffer.len() as u8;
+        }
+    }
+
+    pub fn history_prev(&mut self) {
+        if self.history.is_empty() {
+            return;
+        }
+
+        if self.history_index == self.history.len() {
+            return;
+        }
+
+        self.buffer = self.history[self.history_index].clone();
+        self.index = self.buffer.len() as u8;
+        self.history_index += 1;
+    }
+
+    pub fn history_push(&mut self, cmd: &str) {
+        self.history_index = 0;
+        if self.history.front().map(String::as_str) == Some(cmd) {
+            return;
+        }
+        self.history.push_front(String::from(cmd));
+        if self.history.len() > HISTORY_CAPACITY {
+            self.history.pop_back();
+        }
     }
 }
 
@@ -124,9 +172,13 @@ pub extern "C" fn shell_task() -> ! {
                         shell.on_close = None;
                     }
                 } else if let Some((c, args)) = parser(&cmd) {
+                    COMMAND_RUNNING.store(true, Ordering::Relaxed);
                     run_command(c, args);
+                    COMMAND_RUNNING.store(false, Ordering::Relaxed);
                 } else {
+                    COMMAND_RUNNING.store(true, Ordering::Relaxed);
                     run_command(cmd.trim(), "");
+                    COMMAND_RUNNING.store(false, Ordering::Relaxed);
                 }
             }
             x86_64::instructions::interrupts::without_interrupts(|| {
