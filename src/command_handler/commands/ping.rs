@@ -71,6 +71,7 @@ pub fn cmd_ping(args: &str) {
 
     *PING_REPLY.lock() = None;
     protocol::send(target_ip, 1, &ping_data);
+    crate::net::dispatcher::flush_tx();
 
     let send_time = tsc::now_us();
 

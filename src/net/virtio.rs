@@ -125,7 +125,8 @@ impl Virtqueue {
         // [_; QUEUE_SIZE] avail/used structs always fit, even when the device
         // negotiates a smaller qsz. The desc/avail/used *offsets* above stay
         // qsz-based so they match the device's legacy layout.
-        let max_used_off = (16 * QUEUE_SIZE + 6 + 2 * QUEUE_SIZE + 4095) & !4095;
+        let max_used_off =
+            (16 * QUEUE_SIZE + 6 + 2 * QUEUE_SIZE + 4095) & !4095;
         let max_total = max_used_off + 6 + 8 * QUEUE_SIZE;
         let pages = (max_total + 4095) / 4096;
 
@@ -266,12 +267,18 @@ impl VirtioNet {
 
         nic.enable_bus_mastering();
         let irq = nic.get_IRQ();
+        kinfo!(
+            "virtio-net io-apic input={} pin={} slot={}",
+            irq,
+            nic.get_interrupt_pin(),
+            nic.device()
+        );
         unsafe {
             add_redirect(irq, irq + 32);
         }
+        add_handler((32 + irq) as usize, virtio_handler);
         let bar0 = nic.get_bar(0).ok_or("virtio BAR0 not found")?;
         let iobase = bar0.address as u16;
-        add_handler((32 + irq) as usize, virtio_handler);
 
         // Handshake
         unsafe {
